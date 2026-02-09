@@ -4,7 +4,6 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Package, CheckCircle2, Wallet as WalletIcon, Truck, RefreshCcw, FileSearch, Check, PlayCircle, X, AlertTriangle, ArrowRight, Lightbulb, Loader, BrainCircuit, PhoneForwarded, PieChart as ChartIcon } from 'lucide-react';
 import { Order, Settings, Wallet, User, CustomerProfile } from '../types';
 import { Link } from 'react-router-dom';
-// FIX: Add Variants type from framer-motion to solve typing issue.
 import { motion, Variants } from 'framer-motion';
 import { generateDashboardSuggestions } from '../services/geminiService';
 
@@ -19,7 +18,6 @@ const containerVariants = {
   }
 };
 
-// FIX: Explicitly typed as Variants to fix type error.
 const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {

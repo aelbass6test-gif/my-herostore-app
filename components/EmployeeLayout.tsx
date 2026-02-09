@@ -2,8 +2,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { User, Store, StoreData } from '../types';
-import { Wind, LogOut, Settings, User as UserIcon, Sun, Moon, Monitor, Replace, ChevronDown, Check, LayoutDashboard, PhoneForwarded } from 'lucide-react';
+import { Wind, LogOut, Settings, User as UserIcon, Sun, Moon, Monitor, Replace, ChevronDown, Check, LayoutDashboard, PhoneForwarded, Download } from 'lucide-react';
 import FloatingChat from './FloatingChat';
+import IosInstallPrompt from './IosInstallPrompt';
 
 interface EmployeeLayoutProps {
     currentUser: User | null;
@@ -16,11 +17,16 @@ interface EmployeeLayoutProps {
     allStoresData: Record<string, StoreData>;
     users: User[];
     handleSetActiveStore: (storeId: string) => void;
+    installPrompt: any;
+    onInstall: () => void;
+    isStandalone: boolean;
+    isIos: boolean;
 }
 
-const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ currentUser, onLogout, children, storeOwner, activeStoreId, theme, setTheme, allStoresData, users, handleSetActiveStore }) => {
+const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ currentUser, onLogout, children, storeOwner, activeStoreId, theme, setTheme, allStoresData, users, handleSetActiveStore, installPrompt, onInstall, isStandalone, isIos }) => {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
+    const [showIosInstallModal, setShowIosInstallModal] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
     const storeMenuRef = useRef<HTMLDivElement>(null);
 
@@ -127,6 +133,22 @@ const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ currentUser, onLogout, 
                         </button>
                         {isUserMenuOpen && (
                             <div className="absolute left-0 top-14 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-200 p-2 z-50">
+                                {!isStandalone && installPrompt && (
+                                    <button
+                                        onClick={() => { onInstall(); setIsUserMenuOpen(false); }}
+                                        className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm"
+                                    >
+                                        <Download size={16} /> <span>تثبيت التطبيق</span>
+                                    </button>
+                                )}
+                                {!isStandalone && isIos && !installPrompt && (
+                                    <button
+                                        onClick={() => { setShowIosInstallModal(true); setIsUserMenuOpen(false); }}
+                                        className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm"
+                                    >
+                                        <Download size={16} /> <span>تثبيت على آيفون</span>
+                                    </button>
+                                )}
                                 <Link to="/employee/account-settings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">
                                     <Settings size={16} /> <span>إعدادات الحساب</span>
                                 </Link>
@@ -152,6 +174,7 @@ const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ currentUser, onLogout, 
                 {children}
             </main>
             <FloatingChat currentUser={currentUser} storeOwner={storeOwner} activeStoreId={activeStoreId} />
+            {showIosInstallModal && <IosInstallPrompt onClose={() => setShowIosInstallModal(false)} />}
         </div>
     );
 };

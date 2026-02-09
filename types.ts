@@ -3,6 +3,8 @@
 
 
 
+
+
 // ... (previous imports and declartions)
 
 // FIX: Declaring the 'google' object in the global scope to make it accessible across all files.

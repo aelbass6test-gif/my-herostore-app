@@ -3,7 +3,6 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Package, Plus, Trash2, Edit3, Save, XCircle, Search, AlertCircle, Barcode, DollarSign, Scale, Wallet, RefreshCw, ServerOff, Image as ImageIcon, CheckCircle, Clock, Download, Layers, Grid3x3, Wand2, FileText, Copy, ChevronsUpDown, Percent, Upload, FileUp, ListChecks, FileWarning } from 'lucide-react';
 import { Settings, Product, ProductVariant } from '../types';
 import { fetchWuiltProducts } from '../services/platformService';
-// FIX: Add Variants type from framer-motion to solve typing issue.
 import { motion, Variants } from 'framer-motion';
 import { generateProductDescription, generateSocialMediaPost } from '../services/geminiService';
 
@@ -15,7 +14,6 @@ const containerVariants = {
   }
 };
 
-// FIX: Explicitly typed as Variants to fix type error.
 const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {
@@ -27,7 +25,6 @@ const itemVariants: Variants = {
 
 interface ProductsPageProps {
   settings: Settings;
-  // FIX: Changed type to allow functional updates for state.
   setSettings: (updater: React.SetStateAction<Settings>) => void;
 }
 
@@ -35,7 +32,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [newProduct, setNewProduct] = useState<Partial<Product>>({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], hasVariants: false, options: [], variants: [], useProfitPercentage: false, profitPercentage: 0 });
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], thumbnail: '', hasVariants: false, options: [], variants: [], useProfitPercentage: false, profitPercentage: 0 });
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string | null }>({ type: 'idle', message: null });
@@ -300,12 +297,20 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
   };
 
   const openAddModal = () => {
-    setNewProduct({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], hasVariants: false, options: [], variants: [], useProfitPercentage: false, profitPercentage: 0 });
+    setNewProduct({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], thumbnail: '', hasVariants: false, options: [], variants: [], useProfitPercentage: false, profitPercentage: 0 });
     setIsAdding(true);
   };
 
   const openEditModal = (product: Product) => {
-    setEditingProduct(product);
+    setEditingProduct({
+        ...product,
+        collectionId: product.collectionId ?? '',
+        description: product.description ?? '',
+        thumbnail: product.thumbnail ?? '',
+        images: product.images ?? [],
+        useProfitPercentage: product.useProfitPercentage ?? false,
+        profitPercentage: product.profitPercentage ?? 0,
+    });
   };
   
   const closeModal = () => {
@@ -693,7 +698,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
             const percentage = productData.profitPercentage || 0;
             const newCost = price * (1 - (percentage / 100));
             if (newCost !== productData.costPrice) {
-                setProductData((prev: Product) => ({ ...prev, costPrice: newCost }));
+                setProductData((prev: any) => ({ ...prev, costPrice: newCost }));
             }
         }
     }, [productData.price, productData.profitPercentage, productData.useProfitPercentage, setProductData]);

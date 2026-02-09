@@ -1,7 +1,6 @@
+
 import React, { useState } from 'react';
-// FIX: Using useNavigate for v6 compatibility.
 import { useNavigate } from 'react-router-dom';
-// FIX: Replaced non-existent 'Devices' icon from lucide-react with 'MonitorSmartphone'.
 import { Move, Grid3x3, Palette, LayoutTemplate, MonitorSmartphone } from 'lucide-react';
 import { User, Store } from '../types';
 

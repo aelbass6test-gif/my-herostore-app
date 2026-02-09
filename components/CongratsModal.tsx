@@ -2,7 +2,6 @@
 import React from 'react';
 import { X, ArrowLeft } from 'lucide-react';
 
-// FIX: Explicitly typed as React.FC to handle special props like 'key' correctly.
 const ConfettiPiece: React.FC<{ style: React.CSSProperties }> = ({ style }) => (
   <div className="absolute w-2 h-4" style={style}></div>
 );

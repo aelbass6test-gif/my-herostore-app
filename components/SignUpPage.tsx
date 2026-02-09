@@ -1,13 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-// FIX: Add missing `CheckCircle` import.
 import { ShoppingCart, Store, Mail, User as UserIcon, ShieldAlert, Phone, KeyRound, LogIn, UserPlus, Loader2, X, BarChart, Settings, Users, ArrowLeft, CheckCircle } from 'lucide-react';
 import { User } from '../types';
 import { motion } from 'framer-motion';
 
 // --- Reusable UI Components ---
-// FIX: Specify props for the icon element to resolve cloneElement typing error.
 const FeatureCard: React.FC<{ icon: React.ReactElement<{ size?: number, className?: string }>; title: string; description: string; }> = ({ icon, title, description }) => (
   <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50 text-center transition-all hover:-translate-y-2 hover:border-indigo-500/50">
     <div className="inline-block p-4 bg-slate-700/50 rounded-full mb-4 border border-slate-600">
@@ -57,12 +55,12 @@ const AuthModal: React.FC<{
 
 // --- Main Page Component ---
 interface SignUpPageProps {
-  onAuthSuccess: (user: User, rememberMe: boolean) => void;
+  onPasswordSuccess: (user: User, rememberMe: boolean) => void;
   users: User[];
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
 
-const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthSuccess, users, setUsers }) => {
+const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUsers }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'user' | 'admin'>('user');
   const [showAdminTab, setShowAdminTab] = useState(false);
@@ -102,7 +100,7 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthSuccess, users, setUsers 
     if (isLoginView) {
       const foundUser = users.find(user => user.phone === userPhone && user.password === userPassword);
       if (foundUser) {
-        onAuthSuccess(foundUser, rememberMe);
+        onPasswordSuccess(foundUser, rememberMe);
       } else {
         setUserError('رقم الموبايل أو كلمة المرور غير صحيحة.');
         setIsLoading(false);
@@ -132,7 +130,7 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthSuccess, users, setUsers 
 
       const newUser: User = { fullName, phone: userPhone, password: userPassword, email: userEmail, stores: [], joinDate: new Date().toISOString() };
       setUsers(prevUsers => [...prevUsers, newUser]);
-      onAuthSuccess(newUser, true);
+      onPasswordSuccess(newUser, true);
     }
   };
 
@@ -143,7 +141,7 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthSuccess, users, setUsers 
     const adminUser = users.find(user => user.phone === adminPhone && user.isAdmin);
 
     if (adminUser && adminPassword === adminUser.password) {
-        onAuthSuccess(adminUser, true);
+        onPasswordSuccess(adminUser, true);
     } else {
         setAdminError('بيانات دخول المدير غير صحيحة.');
         setIsLoading(false);

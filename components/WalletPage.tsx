@@ -1,7 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import { Wallet as WalletIcon, Plus, Minus, ArrowUpRight, ArrowDownLeft, Trash2, Calendar, Shield, Eye, Truck, TrendingUp, Info, AlertTriangle, Coins, Receipt, X, Layers } from 'lucide-react';
 import { Wallet, Transaction, Order, Settings } from '../types';
-// FIX: Add Variants type from framer-motion to solve typing issue.
 import { motion, Variants } from 'framer-motion';
 
 const containerVariants = {
@@ -12,7 +12,6 @@ const containerVariants = {
   }
 };
 
-// FIX: Explicitly typed as Variants to fix type error.
 const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {
@@ -101,6 +100,39 @@ const TransactionDetailsModal: React.FC<{
             </div>
         </div>
     );
+};
+
+// FIX: Added the missing DetailCard component.
+interface DetailCardProps {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+  color: 'amber' | 'blue' | 'purple' | 'emerald' | 'red';
+  label: string;
+}
+
+const DetailCard: React.FC<DetailCardProps> = ({ title, value, icon, color, label }) => {
+  const colorClasses = {
+    amber: { bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600' },
+    blue: { bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-600' },
+    purple: { bg: 'bg-purple-50 dark:bg-purple-900/20', text: 'text-purple-600' },
+    emerald: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600' },
+    red: { bg: 'bg-red-50 dark:bg-red-900/20', text: 'text-red-600' },
+  };
+  const currentColors = colorClasses[color];
+
+  return (
+    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg ${currentColors.bg} ${currentColors.text}`}>
+          {icon}
+        </div>
+        <p className="text-xs font-bold text-slate-500">{title}</p>
+      </div>
+      <p className="text-2xl font-black text-slate-800 dark:text-white">{value.toLocaleString()} <span className="text-base font-bold text-slate-400">ج.م</span></p>
+      <p className="text-[10px] text-slate-400 font-bold">{label}</p>
+    </div>
+  );
 };
 
 
@@ -244,138 +276,99 @@ const WalletPage: React.FC<WalletPageProps> = ({ wallet, setWallet, orders, sett
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-right">
-            <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-xs font-black uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-xs font-black uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-4">العملية / الأوردر</th>
-                <th className="px-6 py-4">التاريخ</th>
                 <th className="px-6 py-4">البيان</th>
-                <th className="px-6 py-4 text-center">صافي العملية</th>
-                <th className="px-6 py-4 text-left"></th>
+                <th className="px-6 py-4">النوع</th>
+                <th className="px-6 py-4">التاريخ</th>
+                <th className="px-6 py-4 text-center">المبلغ</th>
+                <th className="px-6 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {processedTransactions.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400 dark:text-slate-600 font-bold italic">لا توجد عمليات مسجلة</td>
-                </tr>
-              ) : (
-                processedTransactions.map((item, index) => {
-                  if (item.type === 'grouped') {
-                    const isProfit = item.netAmount >= 0;
-                    return (
-                      <tr key={`grouped-${item.orderNumber}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer" onClick={() => setSelectedOrderDetails(item)}>
-                        <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-600"><Layers size={18} /></div>
-                                <div>
-                                    <span className="font-black text-blue-600 dark:text-blue-400 font-mono">{item.orderNumber}</span>
-                                    <p className="text-xs text-slate-500 font-bold">{item.customerName}</p>
-                                </div>
-                            </div>
-                        </td>
-                        <td className="px-6 py-4 text-xs text-slate-500 dark:text-slate-400"><div className="flex items-center gap-1"><Calendar size={12} /> {item.lastTransactionDate}</div></td>
-                        <td className="px-6 py-4 text-sm font-bold text-slate-600 dark:text-slate-300">مجمع عمليات ({item.transactions.length})</td>
-                        <td className={`px-6 py-4 text-center font-black ${isProfit ? 'text-emerald-600' : 'text-red-600'}`}>
-                           {isProfit ? '+' : ''}{item.netAmount.toLocaleString()} ج.م
-                        </td>
-                        <td className="px-6 py-4 text-left"></td>
-                      </tr>
-                    )
-                  }
-                  // Manual Transaction
+              {processedTransactions.map((item, index) => {
+                if (item.type === 'grouped') {
+                  return (
+                    <tr key={item.orderNumber} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            <Layers size={16} className="text-slate-400"/>
+                            حركات أوردر #{item.orderNumber}
+                        </div>
+                        <div className="text-xs text-slate-500">{item.customerName}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                          <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold px-2 py-1 rounded">عملية مجمعة</span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{item.lastTransactionDate}</td>
+                      <td className="px-6 py-4 text-center">
+                          <span className={`font-black text-lg ${item.netAmount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                             {item.netAmount >= 0 ? '+' : ''}{item.netAmount.toLocaleString()} ج.م
+                          </span>
+                      </td>
+                      <td className="px-6 py-4 text-left">
+                        <button onClick={() => setSelectedOrderDetails(item)} className="p-2 text-slate-400 opacity-0 group-hover:opacity-100 hover:text-blue-600 rounded-lg transition-all"><Info size={18}/></button>
+                      </td>
+                    </tr>
+                  );
+                } else {
                   const t = item.transaction;
                   return (
-                     <tr key={`manual-${t.id}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                        <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${t.type === 'إيداع' ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600' : 'bg-red-100 dark:bg-red-950 text-red-600'}`}>
-                                {t.type === 'إيداع' ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
-                                </div>
-                                <span className="font-black dark:text-white">{t.type} يدوي</span>
-                            </div>
-                        </td>
-                        <td className="px-6 py-4 text-xs text-slate-500 dark:text-slate-400"><div className="flex items-center gap-1"><Calendar size={12} /> {t.date}</div></td>
-                        <td className="px-6 py-4 text-sm font-bold text-slate-600 dark:text-slate-300">{t.note}</td>
-                        <td className={`px-6 py-4 text-center font-black ${t.type === 'إيداع' ? 'text-emerald-600' : 'text-red-600'}`}>
-                           {t.type === 'إيداع' ? '+' : '-'}{t.amount.toLocaleString()} ج.م
-                        </td>
-                        <td className="px-6 py-4 text-left"><button onClick={() => deleteTransaction(t.id)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"><Trash2 size={18} /></button></td>
-                     </tr>
+                    <tr key={t.id} className="group hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-6 py-4">
+                          <div className="font-bold text-slate-700 dark:text-slate-300">{t.note}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                          <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold px-2 py-1 rounded">عملية يدوية</span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{t.date}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`flex items-center justify-center gap-1 font-bold ${t.type === 'إيداع' ? 'text-emerald-500' : 'text-red-500'}`}>
+                           {t.type === 'إيداع' ? <ArrowUpRight size={14}/> : <ArrowDownLeft size={14}/>} {t.amount.toLocaleString()} ج.م
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-left">
+                         <button onClick={() => deleteTransaction(t.id)} className="p-2 text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-600 rounded-lg transition-all"><Trash2 size={18}/></button>
+                      </td>
+                    </tr>
                   )
-                })
-              )}
+                }
+              })}
+              {processedTransactions.length === 0 && <tr><td colSpan={5} className="text-center py-12 text-slate-400">لا توجد عمليات مسجلة.</td></tr>}
             </tbody>
           </table>
         </div>
       </motion.div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 text-right">
-            <div className={`p-6 text-white ${modalType === 'إيداع' ? 'bg-emerald-600' : 'bg-red-600'}`}>
-              <h3 className="text-xl font-black flex items-center gap-2">
-                {modalType === 'إيداع' ? <Plus size={24} /> : <Minus size={24} />}
-                {modalType === 'إيداع' ? 'إيداع أموال (رأس مال)' : 'سحب أموال (مصاريف)'}
-              </h3>
-            </div>
-            <form onSubmit={handleTransaction} className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-black text-slate-700 dark:text-slate-400">المبلغ (ج.م)</label>
-                <input required type="number" autoFocus placeholder="0.00" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-2xl font-black text-center dark:text-white" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in zoom-in duration-300">
+            <h2 className="text-xl font-black text-slate-800 dark:text-white mb-6">
+              {modalType === 'إيداع' ? 'إضافة رصيد (إيداع)' : 'خصم رصيد (سحب مصروفات)'}
+            </h2>
+            <form onSubmit={handleTransaction} className="space-y-4">
+              <div>
+                <label className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-1 block">المبلغ</label>
+                <div className="relative">
+                  <input type="number" required autoFocus value={amount} onChange={e => setAmount(e.target.value)} className="w-full pl-4 pr-10 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold dark:text-white" placeholder="0.00" />
+                  <WalletIcon className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-black text-slate-700 dark:text-slate-400">البيان / السبب</label>
-                <input type="text" placeholder="مثلاً: رأس مال البداية، مصاريف مكتب..." className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white" value={note} onChange={(e) => setNote(e.target.value)} />
+              <div>
+                <label className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-1 block">البيان / ملاحظات</label>
+                <input type="text" value={note} onChange={e => setNote(e.target.value)} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white" placeholder="مثال: مصاريف إعلانات فيسبوك" />
               </div>
-              <div className="flex gap-3 pt-4">
-                <button type="submit" className={`flex-1 py-3 text-white rounded-xl font-black shadow-lg active:scale-95 transition-all ${modalType === 'إيداع' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}>تأكيد العملية</button>
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl font-black hover:bg-slate-200 transition-all">إلغاء</button>
+              <div className="flex gap-3 pt-2">
+                <button type="submit" className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">تأكيد</button>
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700">إلغاء</button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {selectedOrderDetails && (
-          <TransactionDetailsModal
-              groupedTransaction={selectedOrderDetails}
-              onClose={() => setSelectedOrderDetails(null)}
-              onDelete={deleteTransaction}
-          />
-      )}
+      
+      {selectedOrderDetails && <TransactionDetailsModal groupedTransaction={selectedOrderDetails} onClose={() => setSelectedOrderDetails(null)} onDelete={deleteTransaction} />}
     </motion.div>
-  );
-};
-
-interface DetailCardProps {
-  title: string;
-  value: number;
-  icon: React.ReactNode;
-  color: string;
-  label: string;
-}
-
-const DetailCard = ({ title, value, icon, color, label }: DetailCardProps) => {
-  const colors: Record<string, string> = {
-    emerald: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 border-emerald-100 dark:border-emerald-900/50',
-    red: 'bg-red-50 dark:bg-red-950/30 text-red-600 border-red-100 dark:border-red-900/50',
-    amber: 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 border-amber-100 dark:border-amber-900/50',
-    blue: 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 border-blue-100 dark:border-blue-900/50',
-    purple: 'bg-purple-50 dark:bg-purple-950/30 text-purple-600 border-purple-100 dark:border-purple-900/50',
-    slate: 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 border-slate-200 dark:border-slate-700'
-  };
-
-  return (
-    <div className={`p-5 rounded-2xl border ${colors[color]} bg-white dark:bg-slate-900 flex flex-col gap-2 shadow-sm`}>
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-black opacity-80 uppercase tracking-tighter">{title}</span>
-        <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800 shadow-sm border border-inherit">{icon}</div>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-xl font-black">{value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-        <span className="text-[10px] font-bold">ج.م</span>
-      </div>
-      <span className="text-[10px] font-black opacity-50">{label}</span>
-    </div>
   );
 };
 

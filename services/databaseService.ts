@@ -529,21 +529,6 @@ export const clearStoreData = async (storeId: string, targets: string[] = []): P
     }
 };
 
-export const deleteAllStoresAndData = async (): Promise<{ success: boolean, error?: string }> => {
-    try {
-        console.log("WIPING ALL STORE DATA...");
-        // Deleting from stores_data will cascade delete related data in all other tables
-        // because of `on delete cascade` in the schema.
-        const { error } = await supabase.from('stores_data').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // A filter that matches all rows
-        if (error) throw error;
-        console.log("All store data wiped successfully.");
-        return { success: true };
-    } catch (err: any) {
-        console.error("CRITICAL WIPE ERROR:", err);
-        return { success: false, error: err.message };
-    }
-};
-
 function parseDate(dateStr: string): Date {
     let d = new Date(dateStr);
     if (!isNaN(d.getTime())) return d;

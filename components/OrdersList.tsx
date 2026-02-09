@@ -3,7 +3,6 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Search, Trash2, Edit3, ChevronDown, Package, MapPin, Coins, FileSearch, AlertCircle, ShieldCheck, ShieldAlert, Banknote, ShoppingBag, Save, XCircle, Info, User, Building, Download, Filter, Truck, CheckCircle, RefreshCcw, Briefcase, ChevronLeft, ChevronRight, MoreVertical, Percent, Lock, Unlock, Receipt, AlertTriangle, MessageCircle, Printer, Wand2, FileText, Phone, Archive, ArrowRightLeft, Image as ImageIcon, FileDown } from 'lucide-react';
 import { Order, Settings, OrderStatus, Wallet, Transaction, PaymentStatus, PreparationStatus, OrderItem, Product, CustomerProfile, Store } from '../types';
 import { ORDER_STATUSES } from '../constants';
-// FIX: Add Variants type from framer-motion to solve typing issue.
 import { motion, Variants } from 'framer-motion';
 import { generateInvoiceHTML } from '../utils/invoiceGenerator';
 import { generateShippingNote } from '../services/geminiService';
@@ -18,7 +17,6 @@ const containerVariants = {
   }
 };
 
-// FIX: Explicitly typed as Variants to fix type error.
 const itemVariants: Variants = {
   hidden: { y: 20, opacity: 0 },
   visible: {
@@ -578,7 +576,6 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
       return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   };
 
-  // FIX: Refactored to avoid redundant type comparisons by filtering non-archived orders first.
   const quickStats = useMemo(() => {
     const nonArchivedOrders = orders.filter(o => o.status !== 'مؤرشف');
     return {
@@ -741,7 +738,6 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentCha
             <td className="p-4">
                 <div className="flex items-center gap-2">
                     <div className="font-bold text-slate-800 dark:text-white">{order.customerName}</div>
-                    {/* FIX: Replaced invalid `title` prop on lucide icon with a wrapping `span` element. */}
                     {order.orderType === 'exchange' && <span title={`طلب استبدال للطلب ${order.originalOrderId}`}><ArrowRightLeft size={12} className="text-blue-500" /></span>}
                     <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="p-1 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full" title="مراسلة واتساب"><MessageCircle size={14} /></a>
                 </div>

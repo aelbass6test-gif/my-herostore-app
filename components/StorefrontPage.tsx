@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Settings, Store, Product, StoreCustomization, OrderItem, Review } from '../types';
 import { ShoppingCart, Package, Search, Facebook, Instagram, Twitter, MessageCircle, ArrowDown, CheckCircle, Star, X, LayoutGrid, ChevronLeft, ChevronRight, ArrowRight, BrainCircuit, RefreshCw, Wand2 } from 'lucide-react';
@@ -51,16 +52,8 @@ const ReviewModal = ({ productId, onClose, onSubmit }: { productId: string, onCl
 };
 
 const ProductCard: React.FC<{ product: Product, customization: StoreCustomization, onAddToCart: (product: Product) => void, onReview: (id: string) => void, reviews: Review[], onViewDetails: () => void }> = ({ product, customization, onAddToCart, onReview, reviews, onViewDetails }) => {
-    const cardClasses = useMemo(() => {
-        const base = "bg-white dark:bg-slate-800/50 rounded-2xl overflow-hidden group flex flex-col duration-300 ease-in-out transform hover:-translate-y-1 transition-all cursor-pointer";
-        switch (customization.cardStyle) {
-            case 'elevated': return `${base} border border-transparent hover:border-indigo-500/30 dark:hover:border-indigo-500/50 hover:shadow-2xl hover:shadow-indigo-500/10`;
-            case 'outlined': return `${base} border-2 border-slate-200 dark:border-slate-700/50 hover:border-indigo-500 dark:hover:border-indigo-400`;
-            default: return `${base} border border-slate-200 dark:border-slate-700/50`;
-        }
-    }, [customization.cardStyle]);
-    
     const [isAdded, setIsAdded] = useState(false);
+    
     const productReviews = reviews.filter(r => r.productId === product.id && r.status === 'approved');
     const averageRating = productReviews.length > 0 ? productReviews.reduce((acc, r) => acc + r.rating, 0) / productReviews.length : 0;
 
@@ -77,33 +70,34 @@ const ProductCard: React.FC<{ product: Product, customization: StoreCustomizatio
     };
 
     return (
-        <div className={cardClasses} onClick={onViewDetails}>
-            <div className="aspect-square w-full bg-slate-100 dark:bg-slate-700 overflow-hidden relative">
-                <img 
-                    src={product.thumbnail || `https://picsum.photos/400/400?random=${product.id}`} 
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-in-out" 
-                    loading="lazy"
-                    decoding="async"
-                />
-                {productReviews.length > 0 && (
-                    <div className="absolute top-2 right-2 bg-white/90 dark:bg-black/60 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-bold shadow-sm">
-                        <Star size={12} className="text-amber-500" fill="#f59e0b"/>
-                        <span>{averageRating.toFixed(1)}</span>
-                        <span className="text-slate-400">({productReviews.length})</span>
-                    </div>
-                )}
+        <div className="bg-slate-500 dark:bg-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-lg cursor-pointer group transition-transform hover:-translate-y-1" onClick={onViewDetails}>
+            <div className="bg-white p-2">
+                <div className="aspect-square w-full rounded-lg overflow-hidden relative">
+                    <img 
+                        src={product.thumbnail || `https://picsum.photos/400/400?random=${product.id}`} 
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                        loading="lazy"
+                    />
+                     {productReviews.length > 0 && (
+                        <div className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-full flex items-center gap-1 text-xs font-bold shadow-sm">
+                            <Star size={12} className="text-amber-500" fill="#f59e0b"/>
+                            <span>{averageRating.toFixed(1)}</span>
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="p-5 flex flex-col flex-grow">
-                <h3 className={`font-bold text-slate-800 dark:text-slate-200 text-lg flex-grow mb-2 min-h-[3.5rem] line-clamp-2 ${customization.headingFontWeight}`}>{product.name}</h3>
-                <div className="flex justify-between items-end mb-4">
-                    <p className="font-black text-3xl" style={{ color: customization.primaryColor }}>{product.price.toLocaleString()} <span className="text-sm font-semibold">ج.م</span></p>
-                    <button onClick={handleReviewClick} className="text-xs text-slate-400 hover:text-indigo-500 underline z-10 relative">أضف تقييم</button>
+
+            <div className="p-4 flex flex-col flex-grow text-white">
+                <h3 className={`font-bold text-base flex-grow mb-2 line-clamp-2 ${customization.headingFontWeight}`}>{product.name}</h3>
+                <div className="flex justify-between items-center mb-3">
+                     <p className="font-black text-2xl" style={{ color: '#A5B4FC' /* indigo-300 */ }}>{product.price.toLocaleString()} <span className="text-sm font-semibold">ج.م</span></p>
+                     <button onClick={handleReviewClick} className="text-xs text-slate-300 hover:text-white underline z-10 relative">أضف تقييم</button>
                 </div>
                 <button 
                     onClick={handleAddToCartClick}
                     disabled={isAdded}
-                    className={`w-full flex items-center justify-center gap-2 px-4 py-3 font-bold transition-all text-white z-10 relative ${customization.buttonBorderRadius} ${isAdded ? 'bg-emerald-500' : ''}`}
+                    className={`w-full flex items-center justify-center gap-2 px-4 py-3 font-bold transition-all text-white z-10 relative rounded-lg ${isAdded ? 'bg-emerald-500' : ''}`}
                     style={{ backgroundColor: isAdded ? '' : customization.primaryColor }}
                 >
                     {isAdded ? (
@@ -124,12 +118,15 @@ const ProductCard: React.FC<{ product: Product, customization: StoreCustomizatio
 };
 
 const ProductCardSkeleton: React.FC = () => (
-    <div className="bg-white dark:bg-slate-800/50 rounded-2xl overflow-hidden animate-pulse border border-slate-200 dark:border-slate-700/50">
-        <div className="aspect-square w-full bg-slate-200 dark:bg-slate-700"></div>
-        <div className="p-5">
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-4"></div>
-            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-4"></div>
-            <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+    <div className="bg-slate-500/50 dark:bg-slate-700/50 rounded-2xl p-3 flex flex-col animate-pulse">
+        <div className="bg-slate-300/50 dark:bg-slate-600/50 rounded-xl aspect-square mb-3"></div>
+        <div className="px-2 pb-2 space-y-3">
+            <div className="h-4 bg-slate-400/50 dark:bg-slate-600/50 rounded w-3/4"></div>
+            <div className="h-4 bg-slate-400/50 dark:bg-slate-600/50 rounded w-1/2"></div>
+            <div className="flex justify-between items-center">
+                 <div className="h-6 bg-slate-400/50 dark:bg-slate-600/50 rounded w-1/3"></div>
+            </div>
+            <div className="h-12 bg-slate-400/50 dark:bg-slate-600/50 rounded-lg"></div>
         </div>
     </div>
 );
@@ -216,7 +213,7 @@ const ProductsSection: React.FC<{ settings: Settings, searchTerm: string, custom
         return products;
     }, [settings.products, searchTerm, activeCollectionId, sortOption, aiSearchResults]);
 
-    const gridClass = `grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${customization.productColumnsDesktop} gap-4 md:gap-8`;
+    const gridClass = `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-${customization.productColumnsDesktop} gap-4 md:gap-6`;
 
     return (
         <div id="products-section" className="container mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 scroll-mt-20">
@@ -227,11 +224,11 @@ const ProductsSection: React.FC<{ settings: Settings, searchTerm: string, custom
             
             <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                 {settings.collections.length > 0 && (
-                    <div className="flex justify-center overflow-x-auto pb-4 no-scrollbar">
-                        <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                            <button onClick={() => setActiveCollectionId('all')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeCollectionId === 'all' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-500 hover:text-indigo-500'}`}>الكل</button>
+                    <div className="flex justify-center overflow-x-auto pb-2 -mx-4 px-4 no-scrollbar">
+                        <div className="flex flex-nowrap gap-3">
+                            <button onClick={() => setActiveCollectionId('all')} className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeCollectionId === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300'}`}>الكل</button>
                             {settings.collections.map(col => (
-                                <button key={col.id} onClick={() => setActiveCollectionId(col.id)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeCollectionId === col.id ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-500 hover:text-indigo-500'}`}>{col.name}</button>
+                                <button key={col.id} onClick={() => setActiveCollectionId(col.id)} className={`px-5 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeCollectionId === col.id ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300'}`}>{col.name}</button>
                             ))}
                         </div>
                     </div>
@@ -278,7 +275,7 @@ const ProductsSection: React.FC<{ settings: Settings, searchTerm: string, custom
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
+                <div className="text-center py-20 bg-white dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
                     {isAiSearching ? (
                         <RefreshCw size={48} className="text-slate-300 dark:text-slate-600 mb-4 animate-spin" />
                     ) : (
@@ -393,48 +390,36 @@ const StorefrontPage: React.FC<StorefrontPageProps> = ({ settings, setSettings, 
   };
 
   return (
-    <div className={`min-h-screen flex flex-col transition-colors duration-300`} style={{ fontFamily: customization.fontFamily, backgroundColor: customization.backgroundColor, color: customization.textColor }}>
+    <div className="min-h-screen flex flex-col transition-colors duration-300 bg-slate-100 dark:bg-[#0C101B]" style={{ fontFamily: customization.fontFamily }}>
       
       {customization.isAnnouncementBarVisible && <div className="text-white text-center py-2 text-sm font-bold px-4" style={{ backgroundColor: customization.primaryColor }}>{customization.announcementBarText}</div>}
 
-      <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-           {customization.logoUrl ? <img src={customization.logoUrl} alt="Store Logo" className="h-10 object-contain" style={{ height: customization.logoSize === 'lg' ? '60px' : customization.logoSize === 'sm' ? '30px' : '40px' }} /> : <span className={`text-2xl ${customization.headingFontWeight}`}>{activeStore?.name || 'اسم المتجر'}</span>}
+      <nav className="sticky top-0 z-40 bg-gradient-to-r from-[#1E293B] to-[#0F172A] text-white">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+           <span className={`text-2xl font-black text-white`}>{activeStore?.name || 'اسم المتجر'}</span>
            <div className="flex items-center gap-3 md:gap-6">
-              <div className="relative hidden md:block">
-                  <input type="text" placeholder="بحث عن منتج..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800 border-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"/>
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
-              </div>
-              <button onClick={() => setIsCartOpen(true)} className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              <button onClick={() => setIsCartOpen(true)} className="relative p-2 rounded-full hover:bg-white/10 transition-colors">
                   <ShoppingCart size={24} />
-                  {cart.length > 0 && <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
+                  {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#1E293B]">{cart.reduce((a, c) => a + c.quantity, 0)}</span>}
               </button>
            </div>
         </div>
       </nav>
-
-      <div className="md:hidden px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-          <div className="relative"><input type="text" placeholder="بحث عن منتج..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 border-none focus:ring-2 focus:ring-indigo-500 transition-all"/><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18}/></div>
-      </div>
-
-      <main className="flex-1">
-          {customization.pageSections.map(section => {
-              if (!section.enabled) return null;
-              if (section.type === 'hero') return <HeroSection key={section.id} customization={customization} />;
-              if (section.type === 'products') return <ProductsSection key={section.id} settings={settings} searchTerm={searchTerm} customization={customization} onAddToCart={onAddToCart} onReview={openReviewModal} onViewProduct={setSelectedProduct} />;
-              return null;
-          })}
+      
+      <main className="flex-1 bg-white dark:bg-slate-900 md:rounded-t-3xl">
+          {customization.pageSections.find(s => s.type === 'hero' && s.enabled) && <HeroSection customization={customization} />}
+          {customization.pageSections.find(s => s.type === 'products' && s.enabled) && <ProductsSection settings={settings} searchTerm={searchTerm} customization={customization} onAddToCart={onAddToCart} onReview={openReviewModal} onViewProduct={setSelectedProduct} />}
       </main>
 
-      <footer className="bg-slate-100 dark:bg-slate-900 py-12 border-t border-slate-200 dark:border-slate-800 mt-auto">
+      <footer className="bg-slate-900 dark:bg-[#0C101B] py-8">
           <div className="container mx-auto px-4 text-center">
-              <div className="flex justify-center gap-6 mb-8">
-                  {customization.socialLinks.facebook && <a href={customization.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-sm hover:text-blue-600 transition-colors"><Facebook size={20}/></a>}
-                  {customization.socialLinks.instagram && <a href={customization.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-sm hover:text-pink-600 transition-colors"><Instagram size={20}/></a>}
-                  {customization.socialLinks.x && <a href={customization.socialLinks.x} target="_blank" rel="noopener noreferrer" className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-sm hover:text-black dark:hover:text-white transition-colors"><Twitter size={20}/></a>}
-                  {customization.socialLinks.tiktok && <a href={customization.socialLinks.tiktok} target="_blank" rel="noopener noreferrer" className="p-3 bg-white dark:bg-slate-800 rounded-full shadow-sm hover:text-black dark:hover:text-white transition-colors"><MessageCircle size={20}/></a>}
+              <div className="flex justify-center gap-6 mb-4">
+                  {customization.socialLinks.facebook && <a href={customization.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white"><Facebook size={20}/></a>}
+                  {customization.socialLinks.instagram && <a href={customization.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white"><Instagram size={20}/></a>}
+                  {customization.socialLinks.x && <a href={customization.socialLinks.x} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white"><Twitter size={20}/></a>}
+                  {customization.socialLinks.tiktok && <a href={customization.socialLinks.tiktok} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white"><MessageCircle size={20}/></a>}
               </div>
-              <p className="text-slate-500 dark:text-slate-400">{customization.footerText}</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">{customization.footerText}</p>
           </div>
       </footer>
 
