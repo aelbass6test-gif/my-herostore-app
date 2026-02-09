@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Package, Plus, Trash2, Edit3, Save, XCircle, Search, AlertCircle, Barcode, DollarSign, Scale, Wallet, RefreshCw, ServerOff, Image as ImageIcon, CheckCircle, Clock, Download, Layers, Grid3x3, Wand2, FileText, Copy, ChevronsUpDown, Percent, Upload, FileUp } from 'lucide-react';
+import { Package, Plus, Trash2, Edit3, Save, XCircle, Search, AlertCircle, Barcode, DollarSign, Scale, Wallet, RefreshCw, ServerOff, Image as ImageIcon, CheckCircle, Clock, Download, Layers, Grid3x3, Wand2, FileText, Copy, ChevronsUpDown, Percent, Upload, FileUp, ListChecks, FileWarning } from 'lucide-react';
 import { Settings, Product, ProductVariant } from '../types';
 import { fetchWuiltProducts } from '../services/platformService';
 // FIX: Add Variants type from framer-motion to solve typing issue.
@@ -27,7 +27,8 @@ const itemVariants: Variants = {
 
 interface ProductsPageProps {
   settings: Settings;
-  setSettings: (s: Settings) => void;
+  // FIX: Changed type to allow functional updates for state.
+  setSettings: (updater: React.SetStateAction<Settings>) => void;
 }
 
 const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) => {
@@ -46,7 +47,10 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
   const [showPostModal, setShowPostModal] = useState(false);
   const [generatedPost, setGeneratedPost] = useState('');
   
-  const importInputRef = useRef<HTMLInputElement>(null);
+  // States for the new import modal
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<{ products: Product[], errors: string[] } | null>(null);
+  const [isParsingCsv, setIsParsingCsv] = useState(false);
 
   const isPlatformConnected = settings.integration?.platform !== 'none';
 
@@ -190,89 +194,109 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
     document.body.removeChild(link);
   };
 
-  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleParseCsv = (file: File) => {
+    setIsParsingCsv(true);
+    setImportPreview(null);
     const reader = new FileReader();
+
     reader.onload = (event) => {
+        const errors: string[] = [];
+        const importedProducts: Product[] = [];
         try {
             const text = event.target?.result as string;
             const rows = text.split(/\r?\n/).filter(row => row.trim() !== '');
             if (rows.length < 2) {
-                alert('الملف فارغ أو لا يحتوي على بيانات.');
+                setImportPreview({ products: [], errors: ['الملف فارغ أو لا يحتوي على بيانات.'] });
+                setIsParsingCsv(false);
                 return;
             }
 
             const headers = rows[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-            
-            // Map headers to keys
-            const mapKeys: Record<string, string> = {};
-            headers.forEach((h, index) => {
-                if (['sku', 'كود', 'code'].includes(h)) mapKeys['sku'] = index.toString();
-                else if (['name', 'الاسم', 'title', 'product'].includes(h)) mapKeys['name'] = index.toString();
-                else if (['price', 'السعر', 'selling price'].includes(h)) mapKeys['price'] = index.toString();
-                else if (['cost', 'التكلفة', 'cost price'].includes(h)) mapKeys['costPrice'] = index.toString();
-                else if (['stock', 'quantity', 'الكمية', 'المخزون'].includes(h)) mapKeys['stockQuantity'] = index.toString();
-                else if (['weight', 'الوزن'].includes(h)) mapKeys['weight'] = index.toString();
-                else if (['description', 'الوصف'].includes(h)) mapKeys['description'] = index.toString();
-            });
+            const requiredHeaders = ['name', 'price'];
+            const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
 
-            if (!mapKeys['name'] || !mapKeys['price']) {
-                alert('الملف يجب أن يحتوي على عمودي "الاسم" و "السعر" على الأقل.');
-                return;
-            }
-
-            const newProducts: Product[] = [];
-            
-            // Process rows
-            for (let i = 1; i < rows.length; i++) {
-                // Simple CSV parser that handles quotes roughly
-                const row = rows[i];
-                // Matches values in quotes or standard comma separated
-                const cells = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(',');
-                
-                const cleanCell = (idx: string) => {
-                    const val = cells[parseInt(idx)];
-                    return val ? val.replace(/^"|"$/g, '').trim() : '';
-                };
-
-                if (cells.length < headers.length) continue;
-
-                const name = cleanCell(mapKeys['name']);
-                if (!name) continue;
-
-                newProducts.push({
-                    id: `imported-${Date.now()}-${i}`,
-                    sku: mapKeys['sku'] ? cleanCell(mapKeys['sku']) : `SKU-${Date.now()}-${i}`,
-                    name: name,
-                    price: parseFloat(cleanCell(mapKeys['price'])) || 0,
-                    costPrice: mapKeys['costPrice'] ? (parseFloat(cleanCell(mapKeys['costPrice'])) || 0) : 0,
-                    stockQuantity: mapKeys['stockQuantity'] ? (parseInt(cleanCell(mapKeys['stockQuantity'])) || 0) : 0,
-                    weight: mapKeys['weight'] ? (parseFloat(cleanCell(mapKeys['weight'])) || 1) : 1,
-                    description: mapKeys['description'] ? cleanCell(mapKeys['description']) : '',
-                    hasVariants: false,
-                    options: [],
-                    variants: [],
-                    inStock: true
-                });
-            }
-
-            if (newProducts.length > 0) {
-                setSettings({ ...settings, products: [...settings.products, ...newProducts] });
-                alert(`تم استيراد ${newProducts.length} منتج بنجاح.`);
+            if (missingHeaders.length > 0) {
+                errors.push(`الأعمدة المطلوبة غير موجودة: ${missingHeaders.join(', ')}.`);
             } else {
-                alert('لم يتم العثور على منتجات صالحة للاستيراد.');
-            }
+                const headerMap: { [key in keyof Product]?: number } = {};
+                headers.forEach((h, index) => {
+                    if (h === 'name') headerMap.name = index;
+                    if (h === 'sku') headerMap.sku = index;
+                    if (h === 'price') headerMap.price = index;
+                    if (h === 'costprice') headerMap.costPrice = index;
+                    if (h === 'stockquantity') headerMap.stockQuantity = index;
+                    if (h === 'weight') headerMap.weight = index;
+                    if (h === 'description') headerMap.description = index;
+                });
+                
+                for (let i = 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    const cells = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || row.split(',');
+                    const cleanCell = (val: string | undefined) => val ? val.replace(/^"|"$/g, '').trim() : '';
+                    
+                    const name = cleanCell(cells[headerMap.name!]);
+                    const priceStr = cleanCell(cells[headerMap.price!]);
 
+                    if (!name) { errors.push(`الصف ${i + 1}: اسم المنتج مفقود.`); continue; }
+                    if (!priceStr) { errors.push(`الصف ${i + 1}: سعر المنتج مفقود.`); continue; }
+
+                    const price = parseFloat(priceStr);
+                    if (isNaN(price)) { errors.push(`الصف ${i + 1}: السعر غير صالح.`); continue; }
+
+                    importedProducts.push({
+                        id: `imported-${Date.now()}-${i}`,
+                        name,
+                        price,
+                        sku: headerMap.sku !== undefined ? cleanCell(cells[headerMap.sku]) : `SKU-${Date.now()}-${i}`,
+                        costPrice: headerMap.costPrice !== undefined ? parseFloat(cleanCell(cells[headerMap.costPrice])) || 0 : 0,
+                        stockQuantity: headerMap.stockQuantity !== undefined ? parseInt(cleanCell(cells[headerMap.stockQuantity])) || 0 : 0,
+                        weight: headerMap.weight !== undefined ? parseFloat(cleanCell(cells[headerMap.weight])) || 1 : 1,
+                        description: headerMap.description !== undefined ? cleanCell(cells[headerMap.description]) : '',
+                        hasVariants: false, options: [], variants: [], inStock: true,
+                    });
+                }
+            }
         } catch (err) {
-            console.error(err);
-            alert('حدث خطأ أثناء قراءة الملف. تأكد من أنه ملف CSV صالح.');
+            errors.push('حدث خطأ غير متوقع أثناء تحليل الملف.');
         } finally {
-            if (importInputRef.current) importInputRef.current.value = '';
+            setImportPreview({ products: importedProducts, errors });
+            setIsParsingCsv(false);
         }
     };
-    reader.readAsText(file);
+
+    reader.onerror = () => {
+      setImportPreview({ products: [], errors: ['لا يمكن قراءة الملف.'] });
+      setIsParsingCsv(false);
+    };
+
+    reader.readAsText(file, 'UTF-8');
+  };
+  
+  const handleConfirmImport = () => {
+    if (!importPreview || importPreview.products.length === 0) return;
+
+    setSettings(prev => ({
+        ...prev,
+        products: [...prev.products, ...importPreview.products]
+    }));
+
+    setIsImportModalOpen(false);
+    setImportPreview(null);
+    
+    setSyncStatus({ type: 'success', message: `تم استيراد ${importPreview.products.length} منتج بنجاح!` });
+    setTimeout(() => setSyncStatus(s => s.type === 'success' ? { ...s, type: 'idle' } : s), 5000);
+  };
+  
+  const handleDownloadTemplate = () => {
+    const headers = ['name', 'sku', 'price', 'costPrice', 'stockQuantity', 'weight', 'description'];
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "product_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const openAddModal = () => {
@@ -304,9 +328,8 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
           </div>
           <h2 className="text-xl font-bold dark:text-white">قائمة المنتجات</h2>
         </div>
-        <div className="flex gap-2">
-            <input type="file" ref={importInputRef} onChange={handleImportCSV} accept=".csv" className="hidden" />
-            <button onClick={() => importInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+        <div className="flex flex-wrap gap-2">
+            <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                 <FileUp size={16} /> استيراد
             </button>
             <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
@@ -356,7 +379,8 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Table for desktop */}
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-right">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm font-semibold border-b border-slate-100 dark:border-slate-700">
@@ -448,6 +472,65 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
             </tbody>
           </table>
         </div>
+        
+        {/* Cards for mobile */}
+        <div className="md:hidden p-4 space-y-4">
+          {filteredProducts.length === 0 ? (
+            <div className="px-6 py-12 text-center text-slate-400 dark:text-slate-600">
+              <div className="flex flex-col items-center gap-2">
+                <Package size={40} className="text-slate-200 dark:text-slate-700" />
+                <p>لا توجد منتجات.</p>
+              </div>
+            </div>
+          ) : (
+            filteredProducts.map(product => {
+              const collection = settings.collections.find(c => c.id === product.collectionId);
+              return (
+                <div key={product.id} className="bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 space-y-3">
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-slate-800 dark:text-slate-200 line-clamp-2 mb-2">{product.name}</h3>
+                      {collection && <span className="text-xs font-bold px-2 py-1 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-lg mt-1 inline-block">{collection.name}</span>}
+                    </div>
+                    {product.thumbnail ? (
+                      <img src={product.thumbnail} alt={product.name} className="w-20 h-20 rounded-lg object-cover border-2 border-slate-100 dark:border-slate-700 flex-shrink-0" />
+                    ) : (
+                      <div className="w-20 h-20 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 flex-shrink-0">
+                        <ImageIcon size={24} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <div>
+                      <p className="text-xs font-bold text-slate-400">السعر</p>
+                      <p className="font-bold text-indigo-600 dark:text-indigo-400">{product.price.toLocaleString()} ج.م</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-400">المخزون</p>
+                      <p className={`font-bold ${product.stockQuantity > 0 ? 'text-slate-700 dark:text-slate-300' : 'text-red-500'}`}>{product.stockQuantity}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-400">SKU</p>
+                      <p className="font-mono text-xs text-slate-500 dark:text-slate-400 truncate">{product.sku}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button onClick={() => handleGeneratePost(product)} disabled={isGenerating} className="p-2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-all" title="إنشاء منشور تسويقي">
+                      <Wand2 size={18} />
+                    </button>
+                    <button onClick={() => openEditModal(product)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-all">
+                      <Edit3 size={18} />
+                    </button>
+                    <button onClick={() => setProductToDelete(product)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
       </motion.div>
 
       {(isAdding || editingProduct) && (
@@ -463,6 +546,18 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
             isGenerating={isGenerating}
         />
       )}
+      
+      {isImportModalOpen && (
+        <ProductImportModal 
+            isOpen={isImportModalOpen}
+            onClose={() => { setIsImportModalOpen(false); setImportPreview(null); }}
+            onFileParse={handleParseCsv}
+            isParsing={isParsingCsv}
+            previewData={importPreview}
+            onConfirmImport={handleConfirmImport}
+            onDownloadTemplate={handleDownloadTemplate}
+        />
+      )}
 
       {/* ... (Post and Delete modals remain the same) ... */}
     </motion.div>
@@ -471,6 +566,105 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
 
 
 // ... (Existing helper components)
+
+// --- New Component: ProductImportModal ---
+interface ProductImportModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onFileParse: (file: File) => void;
+    isParsing: boolean;
+    previewData: { products: Product[], errors: string[] } | null;
+    onConfirmImport: () => void;
+    onDownloadTemplate: () => void;
+}
+
+const ProductImportModal: React.FC<ProductImportModalProps> = ({ isOpen, onClose, onFileParse, isParsing, previewData, onConfirmImport, onDownloadTemplate }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            onFileParse(e.target.files[0]);
+        }
+    };
+    
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
+              <h3 className="text-xl font-bold dark:text-white flex items-center gap-2"><FileUp size={20} className="text-indigo-500" /> استيراد المنتجات</h3>
+              <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><XCircle size={24} className="text-slate-400 dark:text-slate-600" /></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+                {isParsing ? (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-500"><RefreshCw size={32} className="animate-spin mb-4" /><p className="font-bold">جاري تحليل الملف...</p></div>
+                ) : !previewData ? (
+                    <div className="text-center">
+                        <h4 className="font-bold text-lg text-slate-800 dark:text-white">الخطوة 1: تجهيز الملف</h4>
+                        <p className="text-sm text-slate-500 mt-1 mb-6">قم بتنزيل القالب واملأه ببيانات منتجاتك ثم ارفعه هنا.</p>
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <button onClick={onDownloadTemplate} className="w-full text-center py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex items-center justify-center gap-2">
+                                <Download size={16}/> تحميل القالب (CSV)
+                            </button>
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
+                            <button onClick={() => fileInputRef.current?.click()} className="w-full mt-3 py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg text-slate-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all font-bold">
+                                اختر ملف CSV أو اسحبه هنا
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <h4 className="font-bold text-lg text-slate-800 dark:text-white">الخطوة 2: مراجعة وتأكيد</h4>
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                           <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-3 rounded-lg font-bold">
+                               <div className="flex items-center gap-2"><ListChecks size={20}/><span>تم العثور على {previewData.products.length} منتج صالح للاستيراد.</span></div>
+                           </div>
+                           {previewData.errors.length > 0 && (
+                                <div className="bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 p-3 rounded-lg font-bold">
+                                    <div className="flex items-center gap-2 mb-2"><FileWarning size={20}/><span>تم العثور على {previewData.errors.length} أخطاء:</span></div>
+                                    <ul className="list-disc pr-5 text-sm space-y-1 max-h-24 overflow-y-auto">
+                                        {previewData.errors.map((err, i) => <li key={i}>{err}</li>)}
+                                    </ul>
+                                </div>
+                           )}
+                        </div>
+                        {previewData.products.length > 0 && (
+                            <div>
+                                <h5 className="font-bold text-slate-600 dark:text-slate-400 mb-2">معاينة أول 5 منتجات:</h5>
+                                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                                    <table className="w-full text-xs text-right">
+                                        <thead className="bg-slate-100 dark:bg-slate-800"><tr><th className="p-2">الاسم</th><th className="p-2">السعر</th><th className="p-2">الكمية</th></tr></thead>
+                                        <tbody>
+                                            {previewData.products.slice(0, 5).map((p, i) => (
+                                                <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                                                    <td className="p-2 font-bold">{p.name}</td>
+                                                    <td className="p-2">{p.price}</td>
+                                                    <td className="p-2">{p.stockQuantity}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t dark:border-slate-800 flex justify-end gap-3 flex-shrink-0">
+                <button type="button" onClick={onClose} className="px-6 py-2.5 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-300 rounded-xl font-bold border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-all">إغلاق</button>
+                {previewData && (
+                    <button type="button" onClick={onConfirmImport} disabled={previewData.products.length === 0} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:bg-slate-400">
+                        <Save size={18} /> تأكيد واستيراد {previewData.products.length} منتج
+                    </button>
+                )}
+            </div>
+          </div>
+        </div>
+    );
+};
+
 
 export default ProductsPage;
 

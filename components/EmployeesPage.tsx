@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, Employee, Permission, PERMISSIONS, User, Store } from '../types';
 import { Users, UserPlus, UserCog, Trash2, XCircle, KeyRound, AlertCircle, Check, Clock } from 'lucide-react';
@@ -71,8 +72,6 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
 
     if (!userToInvite) {
       setInviteError('لم يتم العثور على مستخدم بهذا البريد. تم إرسال دعوة له للانضمام للمنصة. يرجى إعادة دعوته بعد إنشاء حسابه.');
-      // Here you would typically trigger a backend service to send an email.
-      // We simulate this by showing a message.
       return;
     }
 
@@ -96,11 +95,17 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
     setTimeout(() => setInviteSuccess(''), 4000);
   };
   
-  const handleAcceptInvitation = (employeeToAccept: Employee) => {
-     setSettings(s => ({ ...s, employees: s.employees.map(e => e.id === employeeToAccept.id ? { ...e, status: 'active' } : e) }));
-     // Optional: open permissions modal right away for a better UX
-     setEditingEmployee({ ...employeeToAccept, status: 'active' });
-     setIsEmployeeModalOpen(true);
+  const handleRequestAction = (employeeId: string, action: 'accept' | 'decline') => {
+     if (action === 'accept') {
+         setSettings(s => ({ ...s, employees: s.employees.map(e => e.id === employeeId ? { ...e, status: 'active' } : e) }));
+         const employee = settings.employees.find(e => e.id === employeeId);
+         if (employee) {
+             setEditingEmployee({ ...employee, status: 'active' });
+             setIsEmployeeModalOpen(true);
+         }
+     } else { // Decline
+         setSettings(s => ({ ...s, employees: s.employees.filter(e => e.id !== employeeId) }));
+     }
   };
 
 
@@ -120,7 +125,7 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
             onAdd={() => setIsInviteModalOpen(true)}
             onEdit={(emp) => { setEditingEmployee(emp); setIsEmployeeModalOpen(true); }}
             onDelete={(emp) => setEmployeeToDelete(emp)}
-            onAccept={handleAcceptInvitation}
+            onRequestAction={handleRequestAction}
             ownerId={owner?.phone}
             loggedInUser={currentUser}
         />
@@ -155,7 +160,10 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
   );
 };
 
-const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEdit: (emp: Employee) => void, onDelete: (emp: Employee) => void, onAccept: (emp: Employee) => void, ownerId?: string, loggedInUser: User | null }> = ({ employees, onAdd, onEdit, onDelete, onAccept, ownerId, loggedInUser }) => {
+const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEdit: (emp: Employee) => void, onDelete: (emp: Employee) => void, onRequestAction: (id: string, action: 'accept' | 'decline') => void, ownerId?: string, loggedInUser: User | null }> = ({ employees, onAdd, onEdit, onDelete, onRequestAction, ownerId, loggedInUser }) => {
+  const pendingEmployees = employees.filter(e => e.status === 'pending');
+  const activeAndInvited = employees.filter(e => e.status !== 'pending');
+
   return (
     <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
       <div className="flex items-center justify-between mb-8 border-b border-slate-200 dark:border-slate-800 pb-6">
@@ -170,6 +178,27 @@ const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEd
           <UserPlus size={20} /> دعوة موظف
         </button>
       </div>
+      
+      {pendingEmployees.length > 0 && (
+          <div className="mb-8 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+              <h3 className="font-bold text-amber-800 dark:text-amber-300 mb-3 flex items-center gap-2"><Clock size={16}/> طلبات انضمام معلقة</h3>
+              <div className="space-y-2">
+                  {pendingEmployees.map(emp => (
+                      <div key={emp.id} className="bg-white/50 dark:bg-slate-800/30 p-3 rounded-lg flex justify-between items-center">
+                          <div>
+                              <p className="font-bold text-sm text-slate-800 dark:text-white">{emp.name}</p>
+                              <p className="text-xs text-slate-500">{emp.email}</p>
+                          </div>
+                          <div className="flex gap-2">
+                              <button onClick={() => onRequestAction(emp.id, 'accept')} className="px-3 py-1.5 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200">موافقة</button>
+                              <button onClick={() => onRequestAction(emp.id, 'decline')} className="px-3 py-1.5 text-xs font-bold bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300">رفض</button>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-right">
           <thead className="text-slate-500 dark:text-slate-400 text-sm font-semibold">
@@ -180,7 +209,7 @@ const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEd
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {employees.map(emp => {
+            {activeAndInvited.map(emp => {
                 const isOwner = emp.id === ownerId;
                 const isInvited = emp.status === 'invited';
 
@@ -206,7 +235,7 @@ const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEd
                                 )
                             : isInvited ? (
                                 <>
-                                    <button onClick={() => onAccept(emp)} className="flex items-center gap-1.5 text-xs font-bold bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-200"><Check size={16}/> قبول الدعوة</button>
+                                    <button onClick={() => onRequestAction(emp.id, 'accept')} className="flex items-center gap-1.5 text-xs font-bold bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-200"><Check size={16}/> قبول الدعوة</button>
                                     <button onClick={() => onDelete(emp)} className="p-2 text-slate-400 hover:text-red-500 rounded-lg transition-colors" title="إلغاء الدعوة"><Trash2 size={18} /></button>
                                 </>
                             ) : (

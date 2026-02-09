@@ -1,14 +1,69 @@
-import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Globe, Clock, CreditCard, Store, Mail, User as UserIcon, ShieldAlert } from 'lucide-react';
-import { User } from '../types';
 
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+// FIX: Add missing `CheckCircle` import.
+import { ShoppingCart, Store, Mail, User as UserIcon, ShieldAlert, Phone, KeyRound, LogIn, UserPlus, Loader2, X, BarChart, Settings, Users, ArrowLeft, CheckCircle } from 'lucide-react';
+import { User } from '../types';
+import { motion } from 'framer-motion';
+
+// --- Reusable UI Components ---
+// FIX: Specify props for the icon element to resolve cloneElement typing error.
+const FeatureCard: React.FC<{ icon: React.ReactElement<{ size?: number, className?: string }>; title: string; description: string; }> = ({ icon, title, description }) => (
+  <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/50 text-center transition-all hover:-translate-y-2 hover:border-indigo-500/50">
+    <div className="inline-block p-4 bg-slate-700/50 rounded-full mb-4 border border-slate-600">
+        {React.cloneElement(icon, { size: 32, className:"text-indigo-400" })}
+    </div>
+    <h3 className="text-xl font-bold mb-2">{title}</h3>
+    <p className="text-slate-400 text-sm">{description}</p>
+  </div>
+);
+
+const StepCard: React.FC<{ number: string; title: string; description: string; }> = ({ number, title, description }) => (
+  <div className="text-center">
+    <div className="relative inline-block">
+      <div className="w-16 h-16 bg-slate-800/80 border border-slate-700 rounded-full flex items-center justify-center font-black text-3xl text-indigo-400 mb-4">{number}</div>
+    </div>
+    <h3 className="text-2xl font-bold mb-2">{title}</h3>
+    <p className="text-slate-400 max-w-xs mx-auto">{description}</p>
+  </div>
+);
+
+const AuthModal: React.FC<{
+  onClose: () => void;
+  children: React.ReactNode;
+}> = ({ onClose, children }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    onClick={onClose}
+  >
+    <motion.div
+      initial={{ scale: 0.9, y: 20 }}
+      animate={{ scale: 1, y: 0 }}
+      exit={{ scale: 0.9, y: 20 }}
+      className="relative w-full max-w-md"
+      onClick={e => e.stopPropagation()}
+    >
+      <button onClick={onClose} className="absolute -top-3 -right-3 z-10 p-2 bg-slate-700 hover:bg-red-500 rounded-full text-white transition-colors">
+        <X size={20} />
+      </button>
+      {children}
+    </motion.div>
+  </motion.div>
+);
+
+
+// --- Main Page Component ---
 interface SignUpPageProps {
   onAuthSuccess: (user: User, rememberMe: boolean) => void;
   users: User[];
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
 
-const SignUpPage = ({ onAuthSuccess, users, setUsers }: SignUpPageProps) => {
+const SignUpPage: React.FC<SignUpPageProps> = ({ onAuthSuccess, users, setUsers }) => {
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'user' | 'admin'>('user');
   const [showAdminTab, setShowAdminTab] = useState(false);
   
@@ -20,12 +75,18 @@ const SignUpPage = ({ onAuthSuccess, users, setUsers }: SignUpPageProps) => {
   const [userPassword, setUserPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [userError, setUserError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Admin form state
   const [adminPhone, setAdminPhone] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [adminError, setAdminError] = useState('');
 
+  const openAuthModal = (isLogin: boolean) => {
+    setIsLoginView(isLogin);
+    setShowAuthModal(true);
+  };
+  
   useEffect(() => {
     if (userPhone === 'ADMINLOGIN') {
       setShowAdminTab(true);
@@ -36,6 +97,7 @@ const SignUpPage = ({ onAuthSuccess, users, setUsers }: SignUpPageProps) => {
   const handleUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setUserError('');
+    setIsLoading(true);
 
     if (isLoginView) {
       const foundUser = users.find(user => user.phone === userPhone && user.password === userPassword);
@@ -43,23 +105,28 @@ const SignUpPage = ({ onAuthSuccess, users, setUsers }: SignUpPageProps) => {
         onAuthSuccess(foundUser, rememberMe);
       } else {
         setUserError('رقم الموبايل أو كلمة المرور غير صحيحة.');
+        setIsLoading(false);
       }
     } else {
       if (!fullName.trim() || !userPhone.trim() || !userPassword.trim() || !userEmail.trim()) {
         setUserError('يرجى ملء جميع الحقول.');
+        setIsLoading(false);
         return;
       }
       if (userPassword.length < 8) {
         setUserError('يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل.');
+        setIsLoading(false);
         return;
       }
       
       if (users.some(user => user.phone === userPhone)) {
           setUserError('هذا الرقم مسجل بالفعل.');
+          setIsLoading(false);
           return;
       }
       if (users.some(user => user.email === userEmail)) {
         setUserError('هذا البريد الإلكتروني مسجل بالفعل.');
+        setIsLoading(false);
         return;
       }
 
@@ -72,12 +139,14 @@ const SignUpPage = ({ onAuthSuccess, users, setUsers }: SignUpPageProps) => {
   const handleAdminSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAdminError('');
+    setIsLoading(true);
     const adminUser = users.find(user => user.phone === adminPhone && user.isAdmin);
 
     if (adminUser && adminPassword === adminUser.password) {
         onAuthSuccess(adminUser, true);
     } else {
         setAdminError('بيانات دخول المدير غير صحيحة.');
+        setIsLoading(false);
     }
   };
 
@@ -90,128 +159,184 @@ const SignUpPage = ({ onAuthSuccess, users, setUsers }: SignUpPageProps) => {
     setUserEmail('');
     setUserPassword('');
   };
+  
+  const navItemClasses = "font-bold text-slate-300 hover:text-white transition-colors";
 
   return (
-    <div dir="rtl" className="font-cairo bg-gradient-to-br from-[#111827] to-[#0c1e3e] min-h-screen flex items-center justify-center p-4 text-white">
-      <div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-        
-        {/* Right side: Features */}
-        <div className="space-y-6">
-          <h1 className="text-4xl md:text-5xl font-black leading-tight">أنشئ متجرك الإلكتروني في دقيقة</h1>
-          <p className="text-lg text-slate-300">متجر إلكتروني احترافي مع لوحة تحكم كاملة لإدارة المنتجات والطلبات</p>
-          <div className="space-y-4">
-            <FeatureCard icon={<ShoppingCart />} title="متجر إلكتروني كامل" subtitle="إدارة المنتجات والطلبات بسهولة" color="bg-green-500/20 text-green-400" />
-            <FeatureCard icon={<Globe />} title="موقع إلكتروني احترافي" subtitle="صمم موقعك الإلكتروني بسهولة" color="bg-blue-500/20 text-blue-400" />
-            <FeatureCard icon={<Clock />} title="إعداد سريع" subtitle="ابدأ في دقائق معدودة" color="bg-purple-500/20 text-purple-400" />
-            <FeatureCard icon={<CreditCard />} title="بدون بطاقة" subtitle="لا تحتاج بطاقة ائتمان للتجربة" color="bg-yellow-500/20 text-yellow-400" />
+    <div dir="rtl" className="font-cairo bg-slate-950 text-white overflow-x-hidden">
+      
+      {/* --- Header --- */}
+      <header className="fixed top-0 left-0 right-0 z-40 bg-slate-950/70 backdrop-blur-lg border-b border-slate-800">
+        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+          <Link to="/" className="font-black text-2xl">منصتي</Link>
+          <nav className="hidden md:flex items-center gap-8">
+            <a href="#features" className={navItemClasses}>الميزات</a>
+            <a href="#pricing" className={navItemClasses}>الأسعار</a>
+          </nav>
+          <div className="flex items-center gap-3">
+            <button onClick={() => openAuthModal(true)} className="font-bold text-sm text-slate-300 hover:text-white">تسجيل الدخول</button>
+            <button onClick={() => openAuthModal(false)} className="bg-indigo-600 px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-600/20">
+              ابدأ الآن
+            </button>
           </div>
         </div>
+      </header>
 
-        {/* Left side: Form */}
-        <div className="bg-slate-900/40 border border-slate-700 rounded-2xl p-8 backdrop-blur-sm">
-          <div className="flex bg-slate-800/50 border border-slate-700 rounded-lg p-1 mb-6">
-              <TabButton label="المستخدمين" icon={<UserIcon size={16}/>} isActive={activeTab === 'user'} onClick={() => setActiveTab('user')} />
-              {showAdminTab && (
-                <TabButton label="المدير والدعم" icon={<ShieldAlert size={16}/>} isActive={activeTab === 'admin'} onClick={() => setActiveTab('admin')} />
-              )}
-          </div>
+      <main>
+        {/* --- Hero Section --- */}
+        <section className="relative pt-40 pb-24 text-center overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-900/30 to-slate-950 opacity-50"></div>
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[150%] rounded-full bg-[radial-gradient(circle_at_center,_rgba(129,_140,_248,_0.15),_transparent_40%)] -z-10"></div>
           
-          {activeTab === 'user' && (
-            <div className="animate-in fade-in duration-300">
-              <div className="text-center">
-                <div className="inline-block bg-slate-800 p-3 rounded-lg border border-slate-700 mb-4">
-                  <Store className="w-8 h-8 text-slate-400" />
-                </div>
-                <h2 className="text-2xl font-bold">{isLoginView ? 'تسجيل الدخول' : 'إنشاء متجر إلكتروني'}</h2>
-                <p className="text-slate-400 mt-1">{isLoginView ? 'مرحباً بعودتك! أدخل بياناتك للمتابعة.' : 'ابدأ بإنشاء متجرك الإلكتروني الآن'}</p>
-              </div>
-              <form onSubmit={handleUserSubmit} className="space-y-4 mt-6">
-                {!isLoginView && (
-                  <>
-                    <div><label className="text-sm font-bold text-slate-300 mb-2 block">الاسم الكامل</label><input type="text" placeholder="أحمد محمد" className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500" value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
-                    <div><label className="text-sm font-bold text-slate-300 mb-2 block">البريد الإلكتروني</label><input type="email" placeholder="example@mail.com" className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} /></div>
-                  </>
-                )}
-                <div><label className="text-sm font-bold text-slate-300 mb-2 block">رقم الموبايل</label><input type="tel" placeholder={isLoginView ? "01064527923" : "01xxxxxxxxx"} className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500" value={userPhone} onChange={(e) => setUserPhone(e.target.value)} /></div>
-                <div><label className="text-sm font-bold text-slate-300 mb-2 block">كلمة المرور</label><input type="password" placeholder={isLoginView ? "Password123" : "********"} className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} />{!isLoginView && <p className="text-xs text-slate-500 mt-2">يجب أن تحتوي على 8 أحرف على الأقل.</p>}</div>
-                {isLoginView && (
-                  <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
-                          <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="rounded border-slate-600 bg-slate-800/50 text-cyan-500 focus:ring-cyan-500"/>
-                          تذكرني
-                      </label>
-                  </div>
-                )}
-                {userError && <p className="text-sm text-red-400 text-center py-2">{userError}</p>}
-                <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 rounded-lg py-3 font-bold transition-colors shadow-lg shadow-emerald-600/20">{isLoginView ? 'تسجيل الدخول' : 'إنشاء حساب'}</button>
-              </form>
-              <p className="text-center text-sm text-slate-400 mt-6">{isLoginView ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'}{' '}<a href="#" onClick={toggleView} className="font-bold text-cyan-400 hover:underline">{isLoginView ? 'أنشئ حساباً' : 'تسجيل الدخول'}</a></p>
-            </div>
-          )}
+          <div className="container mx-auto px-6 relative z-10">
+            <motion.h1 
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
+                className="text-4xl md:text-6xl font-black leading-tight"
+            >
+              أنشئ متجرك الإلكتروني الاحترافي في دقائق
+            </motion.h1>
+            <motion.p 
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
+                className="text-lg text-slate-300 max-w-2xl mx-auto mt-6"
+            >
+              منصة متكاملة لإدارة المنتجات، الطلبات، والعملاء بسهولة. ابدأ مجاناً، بدون عمولات على المبيعات.
+            </motion.p>
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.4 }}
+                className="mt-10"
+            >
+              <button onClick={() => openAuthModal(false)} className="bg-indigo-600 px-10 py-4 rounded-xl font-bold text-lg hover:bg-indigo-500 transition-transform hover:scale-105 shadow-2xl shadow-indigo-600/30">
+                أنشئ متجرك مجاناً
+              </button>
+            </motion.div>
+          </div>
+        </section>
 
-          {activeTab === 'admin' && (
-            <div className="animate-in fade-in duration-300">
-               <div className="text-center">
-                 <div className="inline-block bg-red-900/50 p-3 rounded-lg border border-red-700 mb-4">
-                   <ShieldAlert className="w-8 h-8 text-red-400" />
-                 </div>
-                 <h2 className="text-2xl font-bold">لوحة تحكم المدير العام</h2>
-                 <p className="text-slate-400 mt-1">تسجيل دخول خاص بالدعم الفني والإدارة.</p>
-               </div>
-               <form onSubmit={handleAdminSubmit} className="space-y-4 mt-6">
-                <div>
-                  <label className="text-sm font-bold text-slate-300 mb-2 block">رقم هاتف المدير</label>
-                  <input
-                    type="tel"
-                    value={adminPhone}
-                    onChange={(e) => setAdminPhone(e.target.value)}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-bold text-slate-300 mb-2 block">كلمة المرور</label>
-                  <input
-                    type="password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
-                 {adminError && <p className="text-sm text-red-400 text-center py-2">{adminError}</p>}
-                 <button type="submit" className="w-full bg-red-600 hover:bg-red-700 rounded-lg py-3 font-bold transition-colors shadow-lg shadow-red-600/20">الدخول كمدير</button>
-               </form>
+        {/* --- Features Section --- */}
+        <section id="features" className="py-24 bg-slate-900">
+          <div className="container mx-auto px-6">
+            <div className="text-center max-w-2xl mx-auto mb-16">
+              <h2 className="text-4xl font-black">كل ما تحتاجه لتبدأ البيع أونلاين</h2>
+              <p className="text-slate-400 mt-4">نقدم لك مجموعة من الأدوات القوية لمساعدتك على النجاح في تجارتك الإلكترونية.</p>
             </div>
-          )}
-          <p className="text-center text-xs text-slate-500 mt-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <FeatureCard icon={<Store />} title="متجر إلكتروني متكامل" description="واجهة عرض احترافية لمنتجاتك مع تجربة شراء سهلة لعملائك." />
+              <FeatureCard icon={<ShoppingCart />} title="إدارة الطلبات" description="نظام متكامل لتتبع الطلبات من التأكيد وحتى التحصيل." />
+              <FeatureCard icon={<BarChart />} title="تحليلات وتقارير" description="احصل على رؤى دقيقة حول مبيعاتك وأرباحك لاتخاذ قرارات أفضل." />
+              <FeatureCard icon={<Users />} title="إدارة العملاء" description="سجل بيانات عملائك وتاريخ طلباتهم لتحسين علاقتك بهم." />
+              <FeatureCard icon={<Settings />} title="تخصيص كامل" description="تحكم كامل في إعدادات الشحن، الدفع، والسياسات المالية لمتجرك." />
+              <FeatureCard icon={<UserPlus />} title="صلاحيات الموظفين" description="أضف فريق عملك وحدد صلاحيات كل موظف بدقة وأمان." />
+            </div>
+          </div>
+        </section>
+
+        {/* --- How It Works Section --- */}
+        <section className="py-24">
+            <div className="container mx-auto px-6">
+                <div className="text-center max-w-2xl mx-auto mb-16">
+                    <h2 className="text-4xl font-black">ابدأ في 3 خطوات بسيطة</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-16">
+                    <StepCard number="01" title="أنشئ حسابك" description="سجل حسابك المجاني في أقل من دقيقة واحدة." />
+                    <StepCard number="02" title="أضف منتجاتك" description="أضف صور ووصف منتجاتك بسهولة تامة." />
+                    <StepCard number="03" title="ابدأ البيع" description="شارك رابط متجرك مع عملائك وابدأ في استقبال الطلبات." />
+                </div>
+            </div>
+        </section>
+
+        {/* --- Pricing Section --- */}
+        <section id="pricing" className="py-24 bg-slate-900">
+          <div className="container mx-auto px-6">
+            <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-10 rounded-3xl text-center max-w-4xl mx-auto shadow-2xl">
+              <h3 className="text-4xl font-black">الخطة المجانية. مدى الحياة.</h3>
+              <p className="text-indigo-200 mt-4 text-lg">نحن نؤمن بدعم المشاريع الناشئة. لهذا، منصتنا مجانية بالكامل.</p>
+              <ul className="mt-8 space-y-3 text-indigo-100 max-w-md mx-auto">
+                <li className="flex items-center justify-center gap-2 font-bold"><CheckCircle className="text-green-400"/> عدد لا محدود من المنتجات</li>
+                <li className="flex items-center justify-center gap-2 font-bold"><CheckCircle className="text-green-400"/> عدد لا محدود من الطلبات</li>
+                <li className="flex items-center justify-center gap-2 font-bold"><CheckCircle className="text-green-400"/> 0% عمولة على المبيعات</li>
+              </ul>
+              <button onClick={() => openAuthModal(false)} className="mt-10 bg-white text-indigo-600 px-10 py-4 rounded-xl font-bold text-lg hover:bg-indigo-100 transition-transform hover:scale-105">
+                ابدأ رحلتك الآن
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* --- Final CTA --- */}
+        <section className="py-24 text-center">
+            <div className="container mx-auto px-6">
+                <h2 className="text-4xl font-black">جاهز لبدء مشروعك؟</h2>
+                <p className="text-slate-400 mt-4">انضم لآلاف التجار الذين يستخدمون منصتنا لتحقيق النجاح.</p>
+                <button onClick={() => openAuthModal(false)} className="mt-8 bg-indigo-600 px-8 py-4 rounded-xl font-bold text-lg hover:bg-indigo-500 transition-transform hover:scale-105 shadow-2xl shadow-indigo-600/30 flex items-center gap-3 mx-auto">
+                    <span>أنشئ متجرك مجاناً</span>
+                    <ArrowLeft />
+                </button>
+            </div>
+        </section>
+      </main>
+
+      <footer className="bg-slate-900 border-t border-slate-800 py-8">
+        <div className="container mx-auto px-6 text-center text-slate-500">
+          <p>
             تم تأسيس وبرمجة المنصة بالكامل بواسطة <span className="font-bold text-slate-400">عبدالرحمن سعيد</span>.
-            <br />
-            سيتم الإطلاق الرسمي قريباً عند اكتمال كافة الميزات.
           </p>
         </div>
+      </footer>
 
-      </div>
+      {/* --- Auth Modal --- */}
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)}>
+          <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-8 backdrop-blur-sm">
+            <div className="flex bg-slate-800/50 border border-slate-700 rounded-lg p-1 mb-6">
+                <button onClick={() => setActiveTab('user')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-bold transition-all ${activeTab === 'user' ? 'bg-slate-700/50 text-white shadow-inner' : 'text-slate-400 hover:bg-slate-700/20'}`}><UserIcon size={16}/> المستخدمين</button>
+                {showAdminTab && (
+                  <button onClick={() => setActiveTab('admin')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-bold transition-all ${activeTab === 'admin' ? 'bg-slate-700/50 text-white shadow-inner' : 'text-slate-400 hover:bg-slate-700/20'}`}><ShieldAlert size={16}/> المدير</button>
+                )}
+            </div>
+            
+            {activeTab === 'user' && (
+              <div className="animate-in fade-in duration-300">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold">{isLoginView ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}</h2>
+                  <p className="text-slate-400 mt-1">{isLoginView ? 'مرحباً بعودتك! أدخل بياناتك للمتابعة.' : 'ابدأ بإنشاء متجرك الإلكتروني الآن'}</p>
+                </div>
+                <form onSubmit={handleUserSubmit} className="space-y-4 mt-6">
+                  {!isLoginView && (
+                    <>
+                      <div className="relative"><UserIcon size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="text" placeholder="الاسم الكامل" required className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={fullName} onChange={(e) => setFullName(e.target.value)} /></div>
+                      <div className="relative"><Mail size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="email" placeholder="البريد الإلكتروني" required className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} /></div>
+                    </>
+                  )}
+                  <div className="relative"><Phone size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="tel" placeholder="رقم الموبايل" required className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={userPhone} onChange={(e) => setUserPhone(e.target.value)} /></div>
+                  <div className="relative"><KeyRound size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="password" placeholder="كلمة المرور" required className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} /></div>
+                  {isLoginView && <div className="flex items-center justify-between"><label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer"><input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="rounded border-slate-600 bg-slate-800/50 text-indigo-500 focus:ring-indigo-500"/> تذكرني</label></div>}
+                  {userError && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg text-center font-bold text-sm">{userError}</div>}
+                  <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white rounded-lg py-3 font-bold transition-all flex items-center justify-center gap-2 mt-6 disabled:opacity-50 disabled:cursor-wait">
+                      {isLoading ? <Loader2 className="animate-spin" /> : (isLoginView ? <><LogIn size={18}/> تسجيل الدخول</> : <><UserPlus size={18}/> إنشاء حساب</>)}
+                  </button>
+                </form>
+                <p className="text-center text-sm text-slate-400 mt-6">{isLoginView ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'}{' '}<a href="#" onClick={toggleView} className="font-bold text-indigo-400 hover:underline">{isLoginView ? 'أنشئ حساباً' : 'تسجيل الدخول'}</a></p>
+                <div className="mt-4 text-center"><Link to="/employee-login" className="text-sm text-slate-400 hover:text-indigo-400 hover:underline">تسجيل دخول الموظفين</Link></div>
+              </div>
+            )}
+            {activeTab === 'admin' && (
+              <div className="animate-in fade-in duration-300">
+                 <div className="text-center"><h2 className="text-2xl font-bold">لوحة تحكم المدير</h2><p className="text-slate-400 mt-1">تسجيل دخول خاص بالإدارة.</p></div>
+                 <form onSubmit={handleAdminSubmit} className="space-y-4 mt-6">
+                  <div className="relative"><Phone size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="tel" required value={adminPhone} onChange={(e) => setAdminPhone(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                  <div className="relative"><KeyRound size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="password" required value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                   {adminError && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg text-center font-bold text-sm">{adminError}</div>}
+                   <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:opacity-90 text-white rounded-lg py-3 font-bold transition-all flex items-center justify-center gap-2 mt-6 disabled:opacity-50 disabled:cursor-wait">
+                      {isLoading ? <Loader2 className="animate-spin"/> : <><LogIn size={18}/> الدخول كمدير</>}
+                   </button>
+                 </form>
+              </div>
+            )}
+          </div>
+        </AuthModal>
+      )}
     </div>
   );
 };
-
-const TabButton: React.FC<{ label: string; icon: React.ReactElement; isActive: boolean; onClick: () => void; }> = ({ label, icon, isActive, onClick }) => (
-    <button onClick={onClick} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-bold transition-all ${isActive ? 'bg-slate-700/50 text-white shadow-inner' : 'text-slate-400 hover:bg-slate-700/20'}`}>
-        {icon}
-        {label}
-    </button>
-);
-
-// FIX: Explicitly type the icon prop to allow adding the 'size' property.
-const FeatureCard: React.FC<{ icon: React.ReactElement<{ size?: number | string }>; title: string; subtitle: string; color: string; }> = ({ icon, title, subtitle, color }) => (
-  <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-4 flex items-center gap-4 backdrop-blur-sm">
-    <div className={`p-3 rounded-lg ${color}`}>
-      {React.cloneElement(icon, { size: 24 })}
-    </div>
-    <div>
-      <h3 className="font-bold text-lg">{title}</h3>
-      <p className="text-slate-400">{subtitle}</p>
-    </div>
-  </div>
-);
 
 export default SignUpPage;

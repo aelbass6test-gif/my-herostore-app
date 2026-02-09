@@ -173,7 +173,7 @@ const PlatformIntegrationCard: React.FC<PlatformIntegrationCardProps> = ({ integ
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-400 mb-2">مفتاح الربط (API Key)</label>
             <input 
               type="text" 
-              readOnly={integration.platform === 'wuilt'}
+              readOnly
               placeholder="يتم ملؤه تلقائياً عند اختيار المنصة" 
               value={integration.apiKey}
               className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-mono disabled:bg-slate-100 dark:disabled:bg-slate-800"
@@ -348,3 +348,4 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({ active, onToggle, variant =
 };
 
 export default SettingsPage;
+   

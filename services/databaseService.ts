@@ -1,6 +1,7 @@
 
 import { supabase } from './supabaseClient';
-import { StoreData, User, Product, Order, Transaction, Supplier, SupplyOrder, Review, AbandonedCart, ActivityLog, Employee, DiscountCode, Collection, CustomPage, PaymentMethod, CustomerProfile, GlobalOption, ShippingCarrierIntegration } from '../types';
+import { Store, StoreData, User, Product, Order, Transaction, Supplier, SupplyOrder, Review, AbandonedCart, ActivityLog, Employee, DiscountCode, Collection, CustomPage, PaymentMethod, CustomerProfile, GlobalOption, ShippingCarrierIntegration } from '../types';
+import { INITIAL_SETTINGS } from '../constants';
 
 const LOCAL_STORAGE_PREFIX = 'wuilt_backup_';
 
@@ -17,9 +18,38 @@ const getLocal = (key: string) => {
 
 const saveLocal = (key: string, data: any) => {
     try {
-        localStorage.setItem(LOCAL_STORAGE_PREFIX + key, JSON.stringify(data));
+        if (key !== 'global' && data && data.settings) {
+            // It's a store data object. Let's make it lighter for backup to avoid quota errors.
+            const liteData = {
+                ...data,
+                settings: {
+                    ...data.settings,
+                    // Replace large, non-critical arrays with empty ones for the local backup.
+                    // The primary source of truth is the database.
+                    products: [],
+                    supplyOrders: [],
+                    reviews: [],
+                    abandonedCarts: [],
+                    activityLogs: [],
+                },
+                // Also, truncate transactional data for local backup
+                orders: data.orders ? data.orders.slice(0, 50) : [],
+                wallet: data.wallet ? {
+                    ...data.wallet,
+                    transactions: data.wallet.transactions ? data.wallet.transactions.slice(0, 100) : []
+                } : { balance: 0, transactions: [] },
+                customers: data.customers ? data.customers.slice(0, 100) : []
+            };
+
+            localStorage.setItem(LOCAL_STORAGE_PREFIX + key, JSON.stringify(liteData));
+
+        } else {
+            // For global data (users, etc.), save it completely as it's usually small.
+            localStorage.setItem(LOCAL_STORAGE_PREFIX + key, JSON.stringify(data));
+        }
     } catch (e) {
-        console.error('LocalStorage write error', e);
+        // If it still fails, log a warning. The app can function without local backup.
+        console.warn(`LocalStorage backup for '${key}' failed, likely due to storage limits. The app will continue, relying on the primary database.`, e);
     }
 };
 
@@ -29,6 +59,24 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
         return !error;
     } catch (e) {
         return false;
+    }
+};
+
+/**
+ * Ensures a parent record for the store exists in the `stores_data` table.
+ * This is crucial to call before any operation that has a foreign key constraint on `stores_data`.
+ */
+export const ensureStoreRecordExists = async (storeId: string, storeName: string): Promise<{ success: boolean, error?: string }> => {
+    try {
+        const { error } = await supabase
+            .from('stores_data')
+            .upsert({ id: storeId, name: storeName }, { onConflict: 'id' });
+        if (error) throw error;
+        console.log(`Ensured store record exists for ${storeId}`);
+        return { success: true };
+    } catch (err: any) {
+        console.error("Failed to ensure store record exists:", err);
+        return { success: false, error: err.message };
     }
 };
 
@@ -77,12 +125,18 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
 
         if (storeRes.error || !storeRes.data) {
             console.log(`Store ${storeId} not found in relational DB, trying legacy...`);
-            return await fetchLegacyDocument(storeId);
+            const legacyData = await fetchLegacyDocument(storeId);
+            // Also check legacy data for products
+            if (legacyData && (!legacyData.settings.products || legacyData.settings.products.length === 0) && INITIAL_SETTINGS.products.length > 0) {
+                console.log(`No products found in legacy data for store ${storeId}. Seeding from initial settings.`);
+                legacyData.settings.products = INITIAL_SETTINGS.products;
+            }
+            return legacyData;
         }
 
         // --- Reconstruct Data Types ---
 
-        const products: Product[] = (productsRes.data || []).map((p: any) => ({
+        let products: Product[] = (productsRes.data || []).map((p: any) => ({
             id: p.id,
             name: p.name,
             sku: p.sku,
@@ -90,6 +144,13 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
             stockQuantity: p.stock_quantity,
             ...p.details
         }));
+        
+        // If no products are found in the database, seed them from the initial settings.
+        // This acts as a one-time migration for existing stores.
+        if (products.length === 0 && INITIAL_SETTINGS.products.length > 0) {
+            console.log(`No products found in DB for store ${storeId}. Seeding from initial settings.`);
+            products = INITIAL_SETTINGS.products;
+        }
 
         const orders: Order[] = (ordersRes.data || []).map((o: any) => ({
             id: o.id,
@@ -261,12 +322,18 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
 
     } catch (err) {
         console.error("Error loading relational data:", err);
-        return getLocal(storeId);
+        const localData = getLocal(storeId);
+        // Also check local storage data for products
+        if (localData && (!localData.settings.products || localData.settings.products.length === 0) && INITIAL_SETTINGS.products.length > 0) {
+            console.log(`No products found in local backup for store ${storeId}. Seeding from initial settings.`);
+            localData.settings.products = INITIAL_SETTINGS.products;
+        }
+        return localData;
     }
 };
 
-export const saveStoreData = async (storeId: string, data: StoreData): Promise<{ success: boolean, error?: string }> => {
-    saveLocal(storeId, data);
+export const saveStoreData = async (store: Store, data: StoreData): Promise<{ success: boolean, error?: string }> => {
+    saveLocal(store.id, data);
 
     try {
         console.log("Starting Full Relational Save (17 Tables)...");
@@ -279,12 +346,17 @@ export const saveStoreData = async (storeId: string, data: StoreData): Promise<{
             ...cleanSettings 
         } = data.settings;
 
-        // 2. Save Main Store Data
+        // 2. Save Main Store Data (including metadata)
         const { error: storeError } = await supabase
             .from('stores_data')
             .upsert({ 
-                id: storeId, 
-                name: 'Store ' + storeId, 
+                id: store.id,
+                name: store.name,
+                specialization: store.specialization,
+                language: store.language,
+                currency: store.currency,
+                url: store.url,
+                creation_date: store.creationDate,
                 settings: cleanSettings 
             }, { onConflict: 'id' });
 
@@ -306,51 +378,63 @@ export const saveStoreData = async (storeId: string, data: StoreData): Promise<{
         };
 
         // 4. Prepare Payloads
-        const productsPayload = products?.map(p => ({
-            id: p.id, store_id: storeId, name: p.name, sku: p.sku || 'N/A', price: p.price || 0, stock_quantity: p.stockQuantity || 0,
-            details: { 
+        const productsPayload = products?.map(p => {
+            const details: any = { 
                 weight: p.weight, costPrice: p.costPrice, thumbnail: p.thumbnail, images: p.images, description: p.description,
                 hasVariants: p.hasVariants, options: p.options, variants: p.variants, collectionId: p.collectionId,
                 inStock: p.inStock, useProfitPercentage: p.useProfitPercentage, profitPercentage: p.profitPercentage
+            };
+            
+            // CRITICAL FIX: Strip base64 image data to prevent "Failed to fetch" on large payloads.
+            if (details.thumbnail && typeof details.thumbnail === 'string' && details.thumbnail.startsWith('data:image')) {
+                details.thumbnail = '';
             }
-        })) || [];
+            if (details.images && Array.isArray(details.images)) {
+                details.images = details.images.filter((img: any) => typeof img === 'string' && !img.startsWith('data:image'));
+            }
+
+            return {
+                id: p.id, store_id: store.id, name: p.name, sku: p.sku || 'N/A', price: p.price || 0, stock_quantity: p.stockQuantity || 0,
+                details: details
+            };
+        }) || [];
 
         const ordersPayload = data.orders?.map(o => ({
-            id: o.id, store_id: storeId, order_number: o.orderNumber, customer_name: o.customerName, status: o.status,
+            id: o.id, store_id: store.id, order_number: o.orderNumber, customer_name: o.customerName, status: o.status,
             total_price: (o.productPrice + o.shippingFee - (o.discount || 0)), date: o.date,
             details: { 
                 items: o.items, customerPhone: o.customerPhone, customerAddress: o.customerAddress, shippingCompany: o.shippingCompany,
                 shippingArea: o.shippingArea, shippingFee: o.shippingFee, productPrice: o.productPrice, productCost: o.productCost,
                 weight: o.weight, discount: o.discount, paymentStatus: o.paymentStatus, preparationStatus: o.preparationStatus,
                 notes: o.notes, waybillNumber: o.waybillNumber, includeInspectionFee: o.includeInspectionFee, isInsured: o.isInsured,
-                productName: o.productName
+                productName: o.productName, confirmationLogs: o.confirmationLogs
             }
         })) || [];
 
         const transactionsPayload = data.wallet.transactions?.map(t => ({
-            id: t.id, store_id: storeId, type: t.type, amount: t.amount, date: t.date ? parseDate(t.date) : new Date(), category: t.category, note: t.note, details: {}
+            id: t.id, store_id: store.id, type: t.type, amount: t.amount, date: t.date ? parseDate(t.date) : new Date(), category: t.category, note: t.note, details: {}
         })) || [];
 
-        const suppliersPayload = suppliers?.map(s => ({ id: s.id, store_id: storeId, name: s.name, phone: s.phone, address: s.address, notes: s.notes })) || [];
-        const supplyOrdersPayload = supplyOrders?.map(s => ({ id: s.id, store_id: storeId, supplier_id: s.supplierId, total_cost: s.totalCost, date: s.date ? parseDate(s.date) : new Date(), items: s.items, status: s.status })) || [];
-        const reviewsPayload = reviews?.map(r => ({ id: r.id, store_id: storeId, product_id: r.productId, customer_name: r.customerName, rating: r.rating, comment: r.comment, status: r.status, date: r.date })) || [];
-        const abandonedCartsPayload = abandonedCarts?.map(c => ({ id: c.id, store_id: storeId, customer_name: c.customerName, customer_phone: c.customerPhone, total_value: c.totalValue, date: c.date, items: c.items })) || [];
-        const activityLogsPayload = activityLogs?.map(l => ({ id: l.id, store_id: storeId, user: l.user, action: l.action, details: l.details, timestamp: l.timestamp, date: l.date })) || [];
+        const suppliersPayload = suppliers?.map(s => ({ id: s.id, store_id: store.id, name: s.name, phone: s.phone, address: s.address, notes: s.notes })) || [];
+        const supplyOrdersPayload = supplyOrders?.map(s => ({ id: s.id, store_id: store.id, supplier_id: s.supplierId, total_cost: s.totalCost, date: s.date ? parseDate(s.date) : new Date(), items: s.items, status: s.status })) || [];
+        const reviewsPayload = reviews?.map(r => ({ id: r.id, store_id: store.id, product_id: r.productId, customer_name: r.customerName, rating: r.rating, comment: r.comment, status: r.status, date: r.date })) || [];
+        const abandonedCartsPayload = abandonedCarts?.map(c => ({ id: c.id, store_id: store.id, customer_name: c.customerName, customer_phone: c.customerPhone, total_value: c.totalValue, date: c.date, items: c.items })) || [];
+        const activityLogsPayload = activityLogs?.map(l => ({ id: l.id, store_id: store.id, user: l.user, action: l.action, details: l.details, timestamp: l.timestamp, date: l.date })) || [];
         
-        const employeesPayload = employees?.map(e => ({ id: e.id, store_id: storeId, name: e.name, email: e.email, phone: e.id, permissions: e.permissions, status: e.status })) || [];
-        const discountsPayload = discountCodes?.map(d => ({ id: d.id, store_id: storeId, code: d.code, type: d.type, value: d.value, active: d.active, usage_count: d.usageCount })) || [];
-        const collectionsPayload = collections?.map(c => ({ id: c.id, store_id: storeId, name: c.name, description: c.description, image: c.image })) || [];
-        const pagesPayload = customPages?.map(p => ({ id: p.id, store_id: storeId, title: p.title, slug: p.slug, content: p.content, is_active: p.isActive })) || [];
-        const paymentMethodsPayload = paymentMethods?.map(p => ({ id: p.id, store_id: storeId, name: p.name, details: p.details, instructions: p.instructions, type: p.type, active: p.active, logo_url: p.logoUrl })) || [];
+        const employeesPayload = employees?.map(e => ({ id: e.id, store_id: store.id, name: e.name, email: e.email, phone: e.id, permissions: e.permissions, status: e.status })) || [];
+        const discountsPayload = discountCodes?.map(d => ({ id: d.id, store_id: store.id, code: d.code, type: d.type, value: d.value, active: d.active, usage_count: d.usageCount })) || [];
+        const collectionsPayload = collections?.map(c => ({ id: c.id, store_id: store.id, name: c.name, description: c.description, image: c.image })) || [];
+        const pagesPayload = customPages?.map(p => ({ id: p.id, store_id: store.id, title: p.title, slug: p.slug, content: p.content, is_active: p.isActive })) || [];
+        const paymentMethodsPayload = paymentMethods?.map(p => ({ id: p.id, store_id: store.id, name: p.name, details: p.details, instructions: p.instructions, type: p.type, active: p.active, logo_url: p.logoUrl })) || [];
         
-        const globalOptionsPayload = globalOptions?.map(g => ({ id: g.id, store_id: storeId, name: g.name, values: g.values })) || [];
-        const shippingIntPayload = shippingIntegrations?.map(s => ({ id: s.id, store_id: storeId, provider: s.provider, api_key: s.apiKey, api_secret: s.apiSecret, account_number: s.accountNumber, is_connected: s.isConnected })) || [];
+        const globalOptionsPayload = globalOptions?.map(g => ({ id: g.id, store_id: store.id, name: g.name, values: g.values })) || [];
+        const shippingIntPayload = shippingIntegrations?.map(s => ({ id: s.id, store_id: store.id, provider: s.provider, api_key: s.apiKey, api_secret: s.apiSecret, account_number: s.accountNumber, is_connected: s.isConnected })) || [];
 
         // Save Customers from StoreData
         // FIX: Mapping 'totalOrders' from UI model to 'orders_count' in DB model
         const customersPayload = data.customers?.map(c => ({
             id: c.id,
-            store_id: storeId,
+            store_id: store.id,
             name: c.name,
             phone: c.phone,
             address: c.address,
@@ -386,7 +470,7 @@ export const saveStoreData = async (storeId: string, data: StoreData): Promise<{
 
     } catch (err: any) {
         console.error("CRITICAL SAVE ERROR:", err);
-        await saveDocumentLegacy(storeId, data);
+        await saveDocumentLegacy(store.id, data);
         
         let friendlyError = err.message;
         if (err.message?.includes('schema cache') || err.message?.includes('Could not find')) {
@@ -441,6 +525,21 @@ export const clearStoreData = async (storeId: string, targets: string[] = []): P
         return { success: true };
     } catch (err: any) {
         console.error("Wipe Error:", err);
+        return { success: false, error: err.message };
+    }
+};
+
+export const deleteAllStoresAndData = async (): Promise<{ success: boolean, error?: string }> => {
+    try {
+        console.log("WIPING ALL STORE DATA...");
+        // Deleting from stores_data will cascade delete related data in all other tables
+        // because of `on delete cascade` in the schema.
+        const { error } = await supabase.from('stores_data').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // A filter that matches all rows
+        if (error) throw error;
+        console.log("All store data wiped successfully.");
+        return { success: true };
+    } catch (err: any) {
+        console.error("CRITICAL WIPE ERROR:", err);
         return { success: false, error: err.message };
     }
 };

@@ -1,5 +1,5 @@
+
 import React from 'react';
-// FIX: Updating react-router-dom import to be compatible with v5.
 import { Link } from 'react-router-dom';
 import { X, ShoppingCart, Trash2, Plus, Minus, Package } from 'lucide-react';
 import { OrderItem } from '../types';

@@ -1,4 +1,8 @@
 
+
+
+
+
 // ... (previous imports and declartions)
 
 // FIX: Declaring the 'google' object in the global scope to make it accessible across all files.
@@ -124,7 +128,7 @@ export interface Employee {
   name: string;
   email: string;
   permissions: Permission[];
-  status?: 'active' | 'invited';
+  status?: 'active' | 'invited' | 'pending';
 }
 
 export interface StoreSection {
@@ -321,6 +325,14 @@ export interface OrderItem {
   variantDescription?: string;
 }
 
+export interface ConfirmationLog {
+  userId: string;
+  userName: string;
+  timestamp: string;
+  action: string;
+  notes?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -357,6 +369,7 @@ export interface Order {
   loyaltyPointsAwarded?: boolean;
   orderType?: 'standard' | 'exchange';
   originalOrderId?: string;
+  confirmationLogs?: ConfirmationLog[];
 }
 
 export interface StoreData {
@@ -412,4 +425,21 @@ export interface Invitation {
   storeId: string;
   storeName: string;
   inviterName: string;
+}
+
+export interface JoinRequest {
+  storeId: string;
+  storeName: string;
+  employeeId: string;
+  employeeName: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  store_id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  created_at: string;
+  is_read: boolean;
 }

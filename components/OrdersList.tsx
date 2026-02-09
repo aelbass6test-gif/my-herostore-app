@@ -269,28 +269,48 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
   };
   
   const handleDeleteOrder = () => {
-    if (!orderToDelete) return;
+    if (!orderToDelete) {
+        console.error("handleDeleteOrder called with no order to delete.");
+        return;
+    }
     
-    // 1. Remove Order
-    setOrders(prevOrders => prevOrders.filter(o => o.id !== orderToDelete.id));
+    const orderIdToDelete = orderToDelete.id;
+    const orderNumberToDelete = orderToDelete.orderNumber;
     
-    // 2. Remove associated transactions from Wallet to ensure data consistency
-    // This prevents orphan transactions that might cause issues later
+    // 1. Remove Order from the main orders list
+    setOrders(prevOrders => prevOrders.filter(o => o.id !== orderIdToDelete));
+    
+    // 2. Remove associated transactions from Wallet
     setWallet(prevWallet => {
-        const transactionsToRemove = prevWallet.transactions.filter(t => 
-            // Heuristic match by order number in note or specific ID pattern
-            t.note.includes(`#${orderToDelete.orderNumber}`) || 
-            t.id.endsWith(`_${orderToDelete.id}`)
-        ).map(t => t.id);
-        
-        if (transactionsToRemove.length === 0) return prevWallet;
-        
+        // Ensure transactions is an array to prevent errors
+        const currentTransactions = prevWallet.transactions || [];
+
+        const updatedTransactions = currentTransactions.filter(t => {
+            const note = t.note || '';
+            const id = t.id || '';
+
+            // Check if transaction is related by order number in note
+            const relatedByNote = orderNumberToDelete ? note.includes(`#${orderNumberToDelete}`) : false;
+
+            // Check if transaction is related by a conventional ID
+            const relatedById = id.endsWith(`_${orderIdToDelete}`);
+
+            // If it's related, we want to remove it, so we return false from filter
+            return !(relatedByNote || relatedById);
+        });
+
+        // If nothing changed, return original wallet to avoid re-render
+        if (updatedTransactions.length === currentTransactions.length) {
+            return prevWallet;
+        }
+
         return {
             ...prevWallet,
-            transactions: prevWallet.transactions.filter(t => !transactionsToRemove.includes(t.id))
+            transactions: updatedTransactions
         };
     });
 
+    // 3. Close the confirmation modal
     setOrderToDelete(null);
   };
 
@@ -549,7 +569,13 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
           case 'فشل_التوصيل': msg = `يا ${name}، المندوب حاول يوصلك النهاردة وماعرفش. ياريت ترد عليه أو تأكد معانا ميعاد تاني.`; break;
           default: msg = `أهلاً ${name}، بخصوص طلبك رقم ${order.orderNumber}...`;
       }
-      return `https://wa.me/2${order.customerPhone}?text=${encodeURIComponent(msg)}`;
+      let phone = order.customerPhone.replace(/\D/g, '');
+      if (phone.startsWith('0')) {
+          phone = '20' + phone.substring(1);
+      } else if (phone.length === 10 && !phone.startsWith('0')) {
+          phone = '20' + phone;
+      }
+      return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   };
 
   // FIX: Refactored to avoid redundant type comparisons by filtering non-archived orders first.
@@ -577,14 +603,14 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
     >
       <motion.div variants={itemVariants} className="flex flex-col md:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-black text-slate-800 dark:text-white">الطلبات</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
            <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
              <Download size={16} /> تصدير Excel
            </button>
            <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-slate-700 transition-all">
              <FileDown size={16} /> تصدير PDF
            </button>
-           <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 transition-all shadow-sm">
+           <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all shadow-sm">
              <Plus size={18}/> أنشئ طلب
            </button>
         </div>
@@ -624,7 +650,7 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
           </div>
         ) : (
           <div className="p-4 flex flex-col md:flex-row justify-between items-center gap-4 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            <div className="flex w-full items-center gap-2 overflow-x-auto no-scrollbar pb-2">
               <TabButton label="الجميع" activeTab={activeTab} setActiveTab={setActiveTab} count={orders.filter(o => o.status !== 'مؤرشف').length} />
               <TabButton label="بانتظار التجهيز" activeTab={activeTab} setActiveTab={setActiveTab} count={orders.filter(o => o.preparationStatus === 'بانتظار التجهيز').length}/>
               <TabButton label="تم التوصيل" activeTab={activeTab} setActiveTab={setActiveTab} count={quickStats.delivered}/>
@@ -634,7 +660,7 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
             <div className="flex items-center gap-2 w-full md:w-auto">
               <div className="relative flex-1">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input type="text" placeholder="بحث..." className="w-full pr-10 pl-4 py-2 bg-white dark:bg-slate-800 rounded-lg outline-none border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                <input type="text" placeholder="بحث..." className="w-full pr-10 pl-4 py-2 bg-white dark:bg-slate-800 rounded-lg outline-none border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
               </div>
               <button className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                   <Filter size={16} /> البحث والتصنيف
@@ -643,7 +669,8 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        {/* Table for Desktop */}
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-right">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider font-black">
               <tr>
@@ -663,6 +690,19 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
             ))}
             </tbody>
           </table>
+        </div>
+        
+        {/* Cards for Mobile */}
+        <div className="md:hidden">
+            {paginatedOrders.length > 0 ? (
+                <div className="p-4 space-y-4">
+                    {paginatedOrders.map(order => (
+                         <OrderCard key={order.id} order={order} onStatusChange={updateOrderStatus} onPaymentChange={handlePaymentStatusChange} onPreparationChange={(id, val) => updateOrderField(id, 'preparationStatus', val)} onEdit={() => { setEditingOrder({ ...order }); setShowAddModal(true); }} onDelete={() => setOrderToDelete(order)} onPrint={() => handlePrintInvoice(order)} isSelected={selectedOrders.includes(order.id)} onSelectRow={() => handleSelectRow(order.id)} settings={settings} whatsappLink={getWhatsAppLink(order)} onReturn={handlePostCollectionReturn} onExchange={handleStartExchange} />
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-12 text-slate-400">لا توجد طلبات.</div>
+            )}
         </div>
 
         <div className="p-4 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-slate-500">
@@ -691,7 +731,7 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
 interface OrderRowProps { order: Order; onStatusChange: (id: string, newStatus: OrderStatus) => void; onPaymentChange: (order: Order, newPaymentStatus: PaymentStatus) => void; onPreparationChange: (id: string, newStatus: PreparationStatus) => void; onEdit: () => void; onDelete: () => void; onPrint: () => void; isSelected: boolean; onSelectRow: () => void; settings: Settings; whatsappLink: string; onReturn: (order: Order) => void; onExchange: (order: Order) => void; }
 const OrderRow: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentChange, onPreparationChange, onEdit, onDelete, onPrint, isSelected, onSelectRow, whatsappLink, onReturn, onExchange }) => {
     const [menuOpen, setMenuOpen] = useState(false);
-    const menuRef = React.useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
     useEffect(() => { const handleClickOutside = (e: MouseEvent) => { if(menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
     const statusColors: Record<OrderStatus, string> = { في_انتظار_المكالمة: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', جاري_المراجعة: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400 border-purple-200 dark:border-purple-800', قيد_التنفيذ: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', تم_الارسال: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400 border-sky-200 dark:border-sky-800', قيد_الشحن: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400 border-blue-200 dark:border-blue-800', تم_توصيلها: 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-400 border-teal-200 dark:border-teal-800', تم_التحصيل: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', مرتجع: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800', مرتجع_بعد_الاستلام: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400 border-orange-200 dark:border-orange-800', تم_الاستبدال: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600', مرتجع_جزئي: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400 border-orange-200 dark:border-orange-800', فشل_التوصيل: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800', ملغي: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700', مؤرشف: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700' };
     const paymentStatusColors: Record<PaymentStatus, string> = { 'بانتظار الدفع': 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 border-amber-200 dark:border-amber-800', 'مدفوع': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', 'مدفوع جزئياً': 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400 border-sky-200 dark:border-sky-800', 'مرتجع': 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800' };
@@ -733,10 +773,79 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentCha
         </tr>
     );
 };
+const OrderCard: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentChange, onPreparationChange, onEdit, onDelete, onPrint, isSelected, onSelectRow, whatsappLink, onReturn, onExchange }) => {
+    const statusColors: Record<OrderStatus, string> = { في_انتظار_المكالمة: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', جاري_المراجعة: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400 border-purple-200 dark:border-purple-800', قيد_التنفيذ: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', تم_الارسال: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400 border-sky-200 dark:border-sky-800', قيد_الشحن: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400 border-blue-200 dark:border-blue-800', تم_توصيلها: 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-400 border-teal-200 dark:border-teal-800', تم_التحصيل: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', مرتجع: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800', مرتجع_بعد_الاستلام: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400 border-orange-200 dark:border-orange-800', تم_الاستبدال: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600', مرتجع_جزئي: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400 border-orange-200 dark:border-orange-800', فشل_التوصيل: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800', ملغي: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700', مؤرشف: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700' };
+    const paymentStatusColors: Record<PaymentStatus, string> = { 'بانتظار الدفع': 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 border-amber-200 dark:border-amber-800', 'مدفوع': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', 'مدفوع جزئياً': 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400 border-sky-200 dark:border-sky-800', 'مرتجع': 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800' };
+
+    return (
+        <div className={`p-4 space-y-4 rounded-xl border ${isSelected ? 'bg-blue-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700' : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'}`}>
+            <div className="flex justify-between items-start">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <input type="checkbox" className="rounded border-slate-300 dark:bg-slate-900 dark:border-slate-700" checked={isSelected} onChange={onSelectRow} />
+                        <span className="font-bold text-slate-800 dark:text-white">{order.customerName}</span>
+                    </div>
+                    <div className="text-xs text-slate-500 font-mono mt-1">{order.orderNumber}</div>
+                </div>
+                 <div className="flex items-center gap-1">
+                    <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="p-2 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full" title="مراسلة واتساب"><MessageCircle size={16} /></a>
+                    <button onClick={onEdit} className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-colors"><Edit3 size={16}/></button>
+                    <button onClick={onDelete} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                </div>
+            </div>
+
+            <div className="space-y-2 text-sm">
+                <p className="font-bold text-slate-700 dark:text-slate-300 truncate">{order.productName}</p>
+                <p className="font-bold text-indigo-600">{(order.totalAmountOverride ?? order.productPrice).toLocaleString()} ج.م</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+                <div className="relative group">
+                    <select value={order.status} onChange={(e) => onStatusChange(order.id, e.target.value as OrderStatus)} className={`appearance-none w-full text-right cursor-pointer text-xs font-black px-3 py-2 rounded-lg border transition-all ${statusColors[order.status]}`}>{ORDER_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}</select>
+                    <ChevronDown size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-current opacity-50 pointer-events-none"/>
+                </div>
+                 <div className="relative group">
+                    <select value={order.paymentStatus} onChange={(e) => onPaymentChange(order, e.target.value as PaymentStatus)} className={`appearance-none w-full text-right cursor-pointer text-xs font-black px-3 py-2 rounded-lg border transition-all ${paymentStatusColors[order.paymentStatus]}`} disabled={order.paymentStatus === 'مدفوع' || order.status !== 'تم_توصيلها'}>{PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select>
+                    <ChevronDown size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-current opacity-50 pointer-events-none"/>
+                </div>
+            </div>
+            
+             {['تم_توصيلها', 'تم_التحصيل'].includes(order.status) && (
+                <div className="flex gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                     <button onClick={() => onReturn(order)} className="flex-1 text-center flex items-center justify-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-md"><RefreshCcw size={14}/> إرجاع</button>
+                     <button onClick={() => onExchange(order)} className="flex-1 text-center flex items-center justify-center gap-1 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-md"><ArrowRightLeft size={14}/> استبدال</button>
+                </div>
+             )}
+        </div>
+    );
+};
 interface QuickStatProps { icon: React.ReactNode; label: string; value: number; color: string; }
 const QuickStat: React.FC<QuickStatProps> = ({ icon, label, value, color }) => { const colors: Record<string, string> = { purple: "text-purple-600 bg-purple-100 dark:bg-purple-900/50", sky: "text-sky-600 bg-sky-100 dark:bg-sky-900/50", emerald: "text-emerald-600 bg-emerald-100 dark:bg-emerald-900/50", red: "text-red-600 bg-red-100 dark:bg-red-900/50", }; return ( <div className="bg-white dark:bg-slate-800/50 p-3 rounded-lg flex items-center gap-3"> <div className={`p-2 rounded-md ${colors[color]}`}>{icon}</div> <div> <div className="text-xs font-bold text-slate-500">{label}</div> <div className="text-lg font-black text-slate-800 dark:text-white">{value}</div> </div> </div> ); };
 interface TabButtonProps { label: string; activeTab: string; setActiveTab: (label: string) => void; count: number; }
-const TabButton: React.FC<TabButtonProps> = ({ label, activeTab, setActiveTab, count }) => ( <button onClick={() => setActiveTab(label)} className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === label ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700/50'}`} > {label} <span className="text-xs bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded-full">{count}</span> </button> );
+const TabButton: React.FC<TabButtonProps> = ({ label, activeTab, setActiveTab, count }) => {
+    const isActive = activeTab === label;
+    return (
+        <button
+            onClick={() => setActiveTab(label)}
+            className={`flex-shrink-0 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors whitespace-nowrap ${
+                isActive
+                ? 'bg-indigo-600 text-white shadow'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+        >
+            <span>{label}</span>
+            <span
+                className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black ${
+                    isActive
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200'
+                }`}
+            >
+                {count}
+            </span>
+        </button>
+    );
+};
 interface OrderModalProps { isOpen: boolean; onClose: () => void; onSubmit: (e: React.FormEvent) => void; orderData: NewOrderState | Order; setOrderData: React.Dispatch<React.SetStateAction<any>>; settings: Settings; isEditing: boolean; customers: Pick<CustomerProfile, 'name' | 'phone' | 'address'>[]; orders: Order[]; }
 
 const NewOrderScreen: React.FC<OrderModalProps> = ({ isOpen, onClose, onSubmit, orderData, setOrderData, settings, isEditing, customers, orders }) => {
@@ -841,7 +950,7 @@ const NewOrderScreen: React.FC<OrderModalProps> = ({ isOpen, onClose, onSubmit, 
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <form onSubmit={onSubmit} className="bg-white dark:bg-slate-900 w-full max-w-4xl h-[95vh] rounded-2xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
-                    <h3 className="text-xl font-black dark:text-white flex items-center gap-3"><ShoppingBag className="text-teal-500"/>{isEditing ? `تعديل الطلب ${orderData.orderNumber}` : 'إنشاء طلب جديد'}</h3>
+                    <h3 className="text-xl font-black dark:text-white flex items-center gap-3"><ShoppingBag className="text-indigo-500"/>{isEditing ? `تعديل الطلب ${orderData.orderNumber}` : 'إنشاء طلب جديد'}</h3>
                     <button type="button" onClick={onClose}><XCircle className="text-slate-400 hover:text-red-500"/></button>
                 </div>
 
@@ -920,7 +1029,7 @@ const NewOrderScreen: React.FC<OrderModalProps> = ({ isOpen, onClose, onSubmit, 
                                 </div>
                             )}
                             <div className="border-t-2 border-slate-300 dark:border-slate-600 my-2"></div>
-                            <div className="flex justify-between font-black text-lg text-teal-600">
+                            <div className="flex justify-between font-black text-lg text-indigo-600">
                                 <span>{finalAmount >= 0 ? 'المطلوب' : 'المستحق'}</span>
                                 <span>{Math.abs(finalAmount).toLocaleString()} ج.م</span>
                             </div>
@@ -937,9 +1046,9 @@ const NewOrderScreen: React.FC<OrderModalProps> = ({ isOpen, onClose, onSubmit, 
                     <div>
                         {isExchange && <div className="text-xs text-slate-500">الطلب الجديد: {totalBeforeCredit.toLocaleString()} ج.م - رصيد سابق: {creditAmount.toLocaleString()} ج.م</div>}
                         <span className="text-sm text-slate-500">{finalAmount >= 0 ? 'الإجمالي المطلوب من العميل' : 'المبلغ المستحق للعميل'}</span>
-                        <p className={`text-2xl font-black ${finalAmount >= 0 ? 'text-teal-600' : 'text-orange-500'}`}>{Math.abs(finalAmount).toLocaleString()} ج.م</p>
+                        <p className={`text-2xl font-black ${finalAmount >= 0 ? 'text-indigo-600' : 'text-orange-500'}`}>{Math.abs(finalAmount).toLocaleString()} ج.م</p>
                     </div>
-                    <button type="submit" className="px-8 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 flex items-center gap-2"><Save size={18}/>{isEditing ? 'تحديث الطلب' : 'حفظ الطلب'}</button>
+                    <button type="submit" className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 flex items-center gap-2"><Save size={18}/>{isEditing ? 'تحديث الطلب' : 'حفظ الطلب'}</button>
                 </div>
             </form>
         </div>
@@ -950,9 +1059,9 @@ const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, onSubmit, orde
     return <NewOrderScreen isOpen={isOpen} onClose={onClose} onSubmit={onSubmit} orderData={orderData} setOrderData={setOrderData} settings={settings} isEditing={isEditing} customers={customers} orders={orders} />
 };
 interface OrderConfirmationSummaryProps { order: Order; settings: Settings; onClose: () => void; }
-const OrderConfirmationSummary: React.FC<OrderConfirmationSummaryProps> = ({ order, settings, onClose }) => { const compFees = settings.companySpecificFees[order.shippingCompany]; const inspectionFee = order.includeInspectionFee ? (compFees?.useCustomFees ? compFees.inspectionFee : settings.inspectionFee) : 0; const insuranceRate = order.isInsured ? (compFees?.useCustomFees ? compFees.insuranceFeePercent : settings.insuranceFeePercent) : 0; const insuranceFee = ((order.productPrice + order.shippingFee) * insuranceRate) / 100; const total = order.totalAmountOverride ?? (order.productPrice + order.shippingFee - order.discount + inspectionFee); return ( <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"> <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl p-8 text-center animate-in zoom-in duration-300 border border-slate-200 dark:border-slate-800"> <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-white dark:border-slate-800 shadow-lg"><CheckCircle size={40} /></div> <h2 className="text-2xl font-black text-slate-800 dark:text-white mb-3">تم إنشاء الطلب بنجاح!</h2> <p className="text-slate-500 dark:text-slate-400 mb-6">ملخص الطلب المالي للعميل <span className="font-bold text-slate-700 dark:text-slate-200">{order.customerName}</span></p> <div className="space-y-3 text-right bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700"> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">إجمالي المنتجات:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.productPrice.toLocaleString()} ج.م</span> </div> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">مصاريف الشحن:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.shippingFee.toLocaleString()} ج.م</span> </div> {inspectionFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم المعاينة:</span> <span className="font-black text-slate-700 dark:text-slate-200">{inspectionFee.toLocaleString()} ج.م</span> </div>} {insuranceFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم التأمين ({insuranceRate}%):</span> <span className="font-black text-slate-700 dark:text-slate-200">{insuranceFee.toFixed(2)} ج.م</span> </div>} {order.discount > 0 && <div className="flex justify-between items-center text-sm text-red-500"> <span className="font-bold">الخصم:</span> <span className="font-black">-{order.discount.toLocaleString()} ج.م</span> </div>} <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div> <div className="flex justify-between items-center text-xl"> <span className="font-black text-blue-600 dark:text-blue-400">الإجمالي المطلوب تحصيله:</span> <span className="font-black text-blue-600 dark:text-blue-400">{total.toLocaleString()} ج.م</span> </div> </div> <button onClick={onClose} className="mt-8 w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all">إغلاق</button> </div> </div> ); };
+const OrderConfirmationSummary: React.FC<OrderConfirmationSummaryProps> = ({ order, settings, onClose }) => { const compFees = settings.companySpecificFees[order.shippingCompany]; const inspectionFee = order.includeInspectionFee ? (compFees?.useCustomFees ? compFees.inspectionFee : settings.inspectionFee) : 0; const insuranceRate = order.isInsured ? (compFees?.useCustomFees ? compFees.insuranceFeePercent : settings.insuranceFeePercent) : 0; const insuranceFee = ((order.productPrice + order.shippingFee) * insuranceRate) / 100; const total = order.totalAmountOverride ?? (order.productPrice + order.shippingFee - order.discount + inspectionFee); return ( <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"> <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl p-8 text-center animate-in zoom-in duration-300 border border-slate-200 dark:border-slate-800"> <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-white dark:border-slate-800 shadow-lg"><CheckCircle size={40} /></div> <h2 className="text-2xl font-black text-slate-800 dark:text-white mb-3">تم إنشاء الطلب بنجاح!</h2> <p className="text-slate-500 dark:text-slate-400 mb-6">ملخص الطلب المالي للعميل <span className="font-bold text-slate-700 dark:text-slate-200">{order.customerName}</span></p> <div className="space-y-3 text-right bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700"> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">إجمالي المنتجات:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.productPrice.toLocaleString()} ج.م</span> </div> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">مصاريف الشحن:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.shippingFee.toLocaleString()} ج.م</span> </div> {inspectionFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم المعاينة:</span> <span className="font-black text-slate-700 dark:text-slate-200">{inspectionFee.toLocaleString()} ج.م</span> </div>} {insuranceFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم التأمين ({insuranceRate}%):</span> <span className="font-black text-slate-700 dark:text-slate-200">{insuranceFee.toFixed(2)} ج.م</span> </div>} {order.discount > 0 && <div className="flex justify-between items-center text-sm text-red-500"> <span className="font-bold">الخصم:</span> <span className="font-black">-{order.discount.toLocaleString()} ج.م</span> </div>} <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div> <div className="flex justify-between items-center text-xl"> <span className="font-black text-indigo-600 dark:text-indigo-400">الإجمالي المطلوب تحصيله:</span> <span className="font-black text-indigo-600 dark:text-indigo-400">{total.toLocaleString()} ج.م</span> </div> </div> <button onClick={onClose} className="mt-8 w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all">إغلاق</button> </div> </div> ); };
 const ConfirmationModal: React.FC<{ title: string; description: string; onConfirm: () => void; onCancel: () => void; }> = ({ title, description, onConfirm, onCancel }) => ( <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"> <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800"> <div className="w-16 h-16 bg-red-50 dark:bg-red-950 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-4"> <AlertCircle size={32} /> </div> <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{title}</h3> <p className="text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">{description}</p> <div className="flex flex-col gap-2"> <button onClick={onConfirm} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none"> تأكيد الحذف </button> <button onClick={onCancel} className="w-full py-3 text-slate-500 dark:text-slate-400 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all"> تراجع </button> </div> </div> </div> );
 interface OrderPreConfirmationModalProps { order: Omit<Order, 'id'>; settings: Settings; onConfirm: () => void; onCancel: () => void; }
-const OrderPreConfirmationModal: React.FC<OrderPreConfirmationModalProps> = ({ order, settings, onConfirm, onCancel }) => { const compFees = settings.companySpecificFees[order.shippingCompany]; const inspectionFee = order.includeInspectionFee ? (compFees?.useCustomFees ? compFees.inspectionFee : settings.inspectionFee) : 0; const insuranceRate = order.isInsured ? (compFees?.useCustomFees ? compFees.insuranceFeePercent : settings.insuranceFeePercent) : 0; const insuranceFee = ((order.productPrice + order.shippingFee) * insuranceRate) / 100; const total = (order as any).totalAmountOverride ?? (order.productPrice + order.shippingFee - (order.discount || 0) + inspectionFee); return ( <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"> <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl p-8 text-center animate-in zoom-in duration-300 border border-slate-200 dark:border-slate-800"> <div className="w-20 h-20 bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-white dark:border-slate-800 shadow-lg"><AlertTriangle size={40} /></div> <h2 className="text-2xl font-black text-slate-800 dark:text-white mb-3">هل أنت متأكد من تفاصيل الطلب؟</h2> <p className="text-slate-500 dark:text-slate-400 mb-6">يرجى مراجعة الملخص المالي قبل تأكيد الطلب.</p> <div className="space-y-3 text-right bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700"> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">إجمالي المنتجات:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.productPrice.toLocaleString()} ج.م</span> </div> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">مصاريف الشحن:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.shippingFee.toLocaleString()} ج.م</span> </div> {inspectionFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم المعاينة:</span> <span className="font-black text-slate-700 dark:text-slate-200">{inspectionFee.toLocaleString()} ج.م</span> </div>} {insuranceFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم التأمين ({insuranceRate}%):</span> <span className="font-black text-slate-700 dark:text-slate-200">{insuranceFee.toFixed(2)} ج.م</span> </div>} {order.discount > 0 && <div className="flex justify-between items-center text-sm text-red-500"> <span className="font-bold">الخصم:</span> <span className="font-black">-{order.discount.toLocaleString()} ج.م</span> </div>} <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div> <div className="flex justify-between items-center text-xl"> <span className="font-black text-blue-600 dark:text-blue-400">الإجمالي المطلوب تحصيله:</span> <span className="font-black text-blue-600 dark:text-blue-400">{total.toLocaleString()} ج.م</span> </div> </div> <div className="mt-8 flex gap-3"><button onClick={onConfirm} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all">تأكيد وإضافة</button><button onClick={onCancel} className="flex-1 py-3 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">رفض وتعديل</button></div> </div> </div> ); };
+const OrderPreConfirmationModal: React.FC<OrderPreConfirmationModalProps> = ({ order, settings, onConfirm, onCancel }) => { const compFees = settings.companySpecificFees[order.shippingCompany]; const inspectionFee = order.includeInspectionFee ? (compFees?.useCustomFees ? compFees.inspectionFee : settings.inspectionFee) : 0; const insuranceRate = order.isInsured ? (compFees?.useCustomFees ? compFees.insuranceFeePercent : settings.insuranceFeePercent) : 0; const insuranceFee = ((order.productPrice + order.shippingFee) * insuranceRate) / 100; const total = (order as any).totalAmountOverride ?? (order.productPrice + order.shippingFee - (order.discount || 0) + inspectionFee); return ( <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"> <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl p-8 text-center animate-in zoom-in duration-300 border border-slate-200 dark:border-slate-800"> <div className="w-20 h-20 bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-white dark:border-slate-800 shadow-lg"><AlertTriangle size={40} /></div> <h2 className="text-2xl font-black text-slate-800 dark:text-white mb-3">هل أنت متأكد من تفاصيل الطلب؟</h2> <p className="text-slate-500 dark:text-slate-400 mb-6">يرجى مراجعة الملخص المالي قبل تأكيد الطلب.</p> <div className="space-y-3 text-right bg-slate-50 dark:bg-slate-800/50 p-5 rounded-xl border border-slate-200 dark:border-slate-700"> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">إجمالي المنتجات:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.productPrice.toLocaleString()} ج.م</span> </div> <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">مصاريف الشحن:</span> <span className="font-black text-slate-700 dark:text-slate-200">{order.shippingFee.toLocaleString()} ج.م</span> </div> {inspectionFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم المعاينة:</span> <span className="font-black text-slate-700 dark:text-slate-200">{inspectionFee.toLocaleString()} ج.م</span> </div>} {insuranceFee > 0 && <div className="flex justify-between items-center text-sm"> <span className="font-bold text-slate-500">رسوم التأمين ({insuranceRate}%):</span> <span className="font-black text-slate-700 dark:text-slate-200">{insuranceFee.toFixed(2)} ج.م</span> </div>} {order.discount > 0 && <div className="flex justify-between items-center text-sm text-red-500"> <span className="font-bold">الخصم:</span> <span className="font-black">-{order.discount.toLocaleString()} ج.م</span> </div>} <div className="border-t border-slate-200 dark:border-slate-700 my-2"></div> <div className="flex justify-between items-center text-xl"> <span className="font-black text-indigo-600 dark:text-indigo-400">الإجمالي المطلوب تحصيله:</span> <span className="font-black text-indigo-600 dark:text-indigo-400">{total.toLocaleString()} ج.م</span> </div> </div> <div className="mt-8 flex gap-3"><button onClick={onConfirm} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all">تأكيد وإضافة</button><button onClick={onCancel} className="flex-1 py-3 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">رفض وتعديل</button></div> </div> </div> ); };
 
 export default OrdersList;

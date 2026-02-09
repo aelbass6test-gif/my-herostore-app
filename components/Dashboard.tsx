@@ -3,7 +3,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Package, CheckCircle2, Wallet as WalletIcon, Truck, RefreshCcw, FileSearch, Check, PlayCircle, X, AlertTriangle, ArrowRight, Lightbulb, Loader, BrainCircuit, PhoneForwarded, PieChart as ChartIcon } from 'lucide-react';
 import { Order, Settings, Wallet, User, CustomerProfile } from '../types';
-// FIX: Updating react-router-dom import to be compatible with v5.
 import { Link } from 'react-router-dom';
 // FIX: Add Variants type from framer-motion to solve typing issue.
 import { motion, Variants } from 'framer-motion';

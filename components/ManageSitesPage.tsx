@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
 // FIX: Using useNavigate for v6 compatibility.
 import { Link, useNavigate } from 'react-router-dom';
 // FIX: Replaced non-existent 'Devices' icon from lucide-react with 'MonitorSmartphone'.
-import { ArrowLeft, Plus, ShoppingCart, Crown, ExternalLink, Inbox, Eye, UserPlus, Settings as SettingsIcon, XCircle, Send, Filter, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Plus, ShoppingCart, Crown, ExternalLink, Inbox, Eye, UserPlus, Settings as SettingsIcon, XCircle, Send, Filter, ChevronsUpDown, Save, Store as StoreIconLucide, Tag } from 'lucide-react';
 import { User, Store, StoreData, Employee } from '../types';
 import { motion } from 'framer-motion';
 
@@ -265,15 +266,27 @@ const StoreSettingsModal: React.FC<{ store: Store, onClose: () => void, onSave: 
         onSave(formData);
     };
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl p-6 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold mb-4">إعدادات متجر: {store.name}</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2"><SettingsIcon size={20} className="text-indigo-500" /> إعدادات المتجر</h3>
+                    <button onClick={onClose}><XCircle className="text-slate-400 hover:text-red-500"/></button>
+                </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                     <input type="text" value={formData.name} onChange={e => setFormData(p => ({...p, name: e.target.value}))} className="w-full p-3 bg-slate-100 rounded-lg"/>
-                     <select value={formData.specialization} onChange={e => setFormData(p => ({...p, specialization: e.target.value}))} className="w-full p-3 bg-slate-100 rounded-lg">
-                        <option>الصحة والجمال</option><option>ملابس وموضة</option><option>إلكترونيات</option><option>أدوات منزلية</option><option>أخرى</option>
-                     </select>
-                     <div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose}>إلغاء</button><button type="submit">حفظ</button></div>
+                     <div>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 block flex items-center gap-1.5"><StoreIconLucide size={16}/> اسم المتجر</label>
+                        <input type="text" value={formData.name} onChange={e => setFormData(p => ({...p, name: e.target.value}))} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"/>
+                     </div>
+                     <div>
+                        <label className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 block flex items-center gap-1.5"><Tag size={16}/> تخصص المتجر</label>
+                         <select value={formData.specialization} onChange={e => setFormData(p => ({...p, specialization: e.target.value}))} className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option>الصحة والجمال</option><option>ملابس وموضة</option><option>إلكترونيات</option><option>أدوات منزلية</option><option>أخرى</option>
+                         </select>
+                     </div>
+                     <div className="flex justify-end gap-3 pt-4">
+                        <button type="button" onClick={onClose} className="px-6 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">إلغاء</button>
+                        <button type="submit" className="px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-700 transition-colors"><Save size={16}/> حفظ التغييرات</button>
+                     </div>
                 </form>
             </div>
         </div>

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Order } from '../types';
 import { Search, MessageSquare, Send, ArrowRight, Phone, CornerUpLeft, QrCode } from 'lucide-react';
@@ -48,9 +49,15 @@ const WhatsAppPage = ({ orders }: { orders: Order[] }) => {
 
     const handleSendMessage = () => {
         if (!message.trim() || !activeChat) return;
-        // Normalize phone number: remove non-digits, replace leading 0 with 20 for Egypt
-        const cleanPhone = activeChat.phone.replace(/\D/g, '').replace(/^0/, '20');
-        const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+        
+        let phone = activeChat.phone.replace(/\D/g, '');
+        if (phone.startsWith('0')) {
+            phone = '20' + phone.substring(1);
+        } else if (phone.length === 10 && !phone.startsWith('0')) {
+            phone = '20' + phone;
+        }
+    
+        const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
         setMessage('');
     };
