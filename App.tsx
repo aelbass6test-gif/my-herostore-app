@@ -524,6 +524,31 @@ export const AppComponent = () => {
         },
     };
     
+    // This component acts as a guard for owner routes.
+    const OwnerLayoutWrapper = () => {
+        if (isEmployeeSession) {
+            return <Navigate to="/employee/dashboard" replace />;
+        }
+        if (!currentUser) {
+            return <Navigate to="/owner-login" replace />;
+        }
+        return <MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme} />;
+    };
+    
+    // This component handles redirection for any undefined routes.
+    const CatchAllRedirect = () => {
+        if (!currentUser) {
+            return <Navigate to="/owner-login" replace />;
+        }
+        if (isEmployeeSession) {
+            return <Navigate to="/employee/dashboard" replace />;
+        }
+        if (currentUser.isAdmin) {
+            return <Navigate to="/admin" replace />;
+        }
+        return <Navigate to="/" replace />;
+    };
+
     return (
         <>
             <Routes>
@@ -557,7 +582,7 @@ export const AppComponent = () => {
                     <Route path="account-settings" element={<EmployeeAccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
                 </Route>
 
-                <Route path="/" element={<MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme} />}>
+                <Route path="/" element={<OwnerLayoutWrapper />}>
                     <Route index element={<Dashboard {...pageProps} />} />
                     <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} />} />
                     <Route path="orders" element={<OrdersList {...pageProps} addLoyaltyPointsForOrder={() => {}} />} />
@@ -603,11 +628,7 @@ export const AppComponent = () => {
                 <Route path="store" element={<StorefrontPage {...pageProps} onAddToCart={() => {}} onUpdateCartQuantity={() => {}} onRemoveFromCart={() => {}} />} />
                 <Route path="checkout" element={<CheckoutPage {...pageProps} onPlaceOrder={() => '123'} />} />
                 <Route path="order-success/:orderId" element={<OrderSuccessPage {...pageProps} />} />
-                <Route path="*" element={
-                    currentUser?.isAdmin 
-                        ? <Navigate to="/admin" /> 
-                        : <MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme}><Dashboard {...pageProps}/></MainLayout>
-                } />
+                <Route path="*" element={<CatchAllRedirect />} />
             </Routes>
             {showCongratsModal && <CongratsModal onClose={() => setShowCongratsModal(false)} />}
         </>
