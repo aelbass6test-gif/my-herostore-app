@@ -133,7 +133,7 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
             supabase.from('reviews').select('*').eq('store_id', storeId),
             supabase.from('abandoned_carts').select('*').eq('store_id', storeId),
             supabase.from('activity_logs').select('*').eq('store_id', storeId),
-            supabase.from('employees').select('*').eq('store_id', storeId),
+            supabase.from('employees').select('*, users(full_name, email)').eq('store_id', storeId),
             supabase.from('discount_codes').select('*').eq('store_id', storeId),
             supabase.from('collections').select('*').eq('store_id', storeId),
             supabase.from('custom_pages').select('*').eq('store_id', storeId),
@@ -237,9 +237,9 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
         }));
 
         const employees: Employee[] = (employeesRes.data || []).map((e: any) => ({
-            id: e.id,
-            name: e.name,
-            email: e.email,
+            id: e.phone,
+            name: e.users?.full_name || 'مستخدم غير معروف',
+            email: e.users?.email || 'بريد غير معروف',
             permissions: e.permissions,
             status: e.status
         }));
@@ -369,7 +369,7 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
 
         const saveArray = async (table: string, payload: any[], onConflict: string = 'id') => {
             if (payload && payload.length > 0) {
-                const uniquePayload = Array.from(new Map(payload.map(item => [String(item.id), item])).values());
+                const uniquePayload = Array.from(new Map(payload.map(item => [String(item.id || `${item.store_id}_${item.phone}`), item])).values());
                 if (uniquePayload.length === 0) return;
                 const { error } = await supabase.from(table).upsert(uniquePayload, { onConflict });
                 if (error) throw new Error(`${table} save failed: ${error.message} - ${JSON.stringify(error.details)}`);
@@ -391,7 +391,7 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
         const reviewsPayload = reviews.map(r => { const { productId, customerName, ...rest } = r; return { ...rest, store_id: store.id, product_id: productId, customer_name: customerName }; });
         const abandonedCartsPayload = abandonedCarts.map(ac => ({ id: ac.id, store_id: store.id, customer_name: ac.customerName, customer_phone: ac.customerPhone, total_value: ac.totalValue, date: ac.date, items: ac.items }));
         const activityLogsPayload = activityLogs.map(al => ({ id: al.id, store_id: store.id, user_name: al.user, action: al.action, details: al.details, timestamp: al.timestamp, date: al.date }));
-        const employeesPayload = employees.map(e => ({ id: e.id, store_id: store.id, name: e.name, email: e.email, permissions: e.permissions, status: e.status }));
+        const employeesPayload = employees.map(e => ({ store_id: store.id, phone: e.id, permissions: e.permissions, status: e.status }));
         const discountsPayload = discountCodes.map(d => { const { usageCount, ...rest } = d; return { ...rest, store_id: store.id, usage_count: usageCount }; });
         const collectionsPayload = collections.map(c => ({ ...c, store_id: store.id }));
         const pagesPayload = customPages.map(p => { const { isActive, ...rest } = p; return { ...rest, store_id: store.id, is_active: isActive }; });
@@ -413,7 +413,7 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
             saveArray('reviews', reviewsPayload),
             saveArray('abandoned_carts', abandonedCartsPayload),
             saveArray('activity_logs', activityLogsPayload),
-            saveArray('employees', employeesPayload, 'store_id,id'),
+            saveArray('employees', employeesPayload, 'store_id,phone'),
             saveArray('discount_codes', discountsPayload),
             saveArray('collections', collectionsPayload),
             saveArray('custom_pages', pagesPayload),
