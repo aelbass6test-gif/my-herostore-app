@@ -1,9 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-// FIX: Using useNavigate for v6 compatibility.
 import { Link, useNavigate } from 'react-router-dom';
-// FIX: Replaced non-existent 'Devices' icon from lucide-react with 'MonitorSmartphone'.
-import { ArrowLeft, Plus, ShoppingCart, Crown, ExternalLink, Inbox, Eye, UserPlus, Settings as SettingsIcon, XCircle, Send, Filter, ChevronsUpDown, Save, Store as StoreIconLucide, Tag, MonitorSmartphone } from 'lucide-react';
+import { ArrowLeft, Plus, ShoppingCart, ExternalLink, Inbox, Eye, UserPlus, Settings as SettingsIcon, XCircle, Send, Filter, ChevronsUpDown, Save, Store as StoreIconLucide, Tag, MonitorSmartphone } from 'lucide-react';
 import { User, Store, StoreData, Employee } from '../types';
 import { motion } from 'framer-motion';
 
@@ -33,19 +31,21 @@ interface ManageSitesPageProps {
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   allStoresData: Record<string, StoreData>;
   setAllStoresData: React.Dispatch<React.SetStateAction<Record<string, StoreData>>>;
+  currentUser: User | null;
 }
 
-const StoreCard: React.FC<{ store: Store; onSelect: (id: string) => void; onPreview: (id: string) => void; onInvite: (store: Store) => void; onSettings: (store: Store) => void; }> = ({ store, onSelect, onPreview, onInvite, onSettings }) => {
+const StoreCard: React.FC<{ store: Store; ownerName?: string; onSelect: (id: string) => void; onPreview: (id: string) => void; onInvite: (store: Store) => void; onSettings: (store: Store) => void; }> = ({ store, ownerName, onSelect, onPreview, onInvite, onSettings }) => {
   const creationDate = new Date(store.creationDate);
   const formattedDate = `تم إنشاؤه في ${creationDate.getDate()} ${creationDate.toLocaleString('ar-EG', { month: 'long' })} ${creationDate.getFullYear()}`;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 flex flex-col group">
+    <motion.div variants={itemVariants} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 flex flex-col group">
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex items-center gap-2 mb-3">
           <span className="flex items-center gap-1 text-xs font-bold text-teal-700 bg-teal-100 dark:bg-teal-900/50 dark:text-teal-300 px-2 py-1 rounded-full"><ShoppingCart size={14}/> متجر</span>
         </div>
         <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-1 leading-tight">{store.name}</h3>
+        {ownerName && <p className="text-xs font-bold text-slate-400 mb-2">المالك: {ownerName}</p>}
         <a 
           href={`https://${store.url}`}
           target="_blank"
@@ -68,89 +68,33 @@ const StoreCard: React.FC<{ store: Store; onSelect: (id: string) => void; onPrev
         <button onClick={() => onInvite(store)} className="p-2 text-slate-500 hover:text-purple-600 rounded-lg transition-colors hover:bg-purple-50 dark:hover:bg-purple-900/20" title="دعوة موظف"><UserPlus size={16}/></button>
         <button onClick={() => onPreview(store.id)} className="p-2 text-slate-500 hover:text-blue-600 rounded-lg transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/20" title="معاينة"><Eye size={16} /></button>
       </div>
-    </div>
-  );
-};
-
-
-const ManageStoresView: React.FC<{ myStores: Store[]; collaboratingStores: Store[]; onSelectStore: (id: string) => void; onPreviewStore: (id: string) => void; onInvite: (store: Store) => void; onSettings: (store: Store) => void; allSpecializations: string[]; filter: string; setFilter: (f: string) => void; }> = ({ myStores, collaboratingStores, onSelectStore, onPreviewStore, onInvite, onSettings, allSpecializations, filter, setFilter }) => {
-  return (
-    <motion.div 
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" 
-        dir="rtl"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-    >
-      <motion.div variants={itemVariants} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800 dark:text-white">إدارة المتاجر</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">يمكنك من لوحة التحكم إدارة وحذف أو ترقية أو ضبط الإعدادات لأي من متاجرك على الإنترنت.</p>
-        </div>
-        <div className="flex items-center gap-2">
-            <div className="relative">
-                <Filter size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
-                <select value={filter} onChange={e => setFilter(e.target.value)} className="appearance-none w-full sm:w-48 pr-10 pl-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option value="all">كل التخصصات</option>
-                    {allSpecializations.map(spec => <option key={spec} value={spec}>{spec}</option>)}
-                </select>
-                <ChevronsUpDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
-            </div>
-            <Link to="/create-store" className="flex items-center justify-center gap-2 bg-teal-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-teal-600 transition-all shadow-md active:scale-95">
-                <Plus size={20} /> أنشئ متجرك
-            </Link>
-        </div>
-      </motion.div>
-      
-      <motion.div variants={itemVariants} className="space-y-12">
-        <div>
-            <h2 className="text-2xl font-bold text-slate-700 dark:text-white mb-6">متاجري</h2>
-            {myStores.length > 0 ? (
-              <motion.div 
-                variants={containerVariants} 
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-              >
-                  {myStores.map(store => <motion.div key={store.id} variants={itemVariants}><StoreCard store={store} onSelect={onSelectStore} onPreview={onPreviewStore} onInvite={onInvite} onSettings={onSettings} /></motion.div>)}
-              </motion.div>
-            ) : (
-              <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
-                <Inbox size={40} className="text-slate-300 dark:text-slate-600 mb-3" />
-                <h3 className="font-bold text-lg text-slate-600 dark:text-slate-300">ليس لديك أي متاجر بعد.</h3>
-                <p className="text-sm">ابدأ بإنشاء متجرك الأول لتعرضه هنا.</p>
-              </div>
-            )}
-        </div>
-        
-        {collaboratingStores.length > 0 && (
-          <div>
-              <h2 className="text-2xl font-bold text-slate-700 dark:text-white mb-6">متاجر متعاون بها</h2>
-              <motion.div 
-                variants={containerVariants} 
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-              >
-                    {collaboratingStores.map(store => <motion.div key={store.id} variants={itemVariants}><StoreCard store={store} onSelect={onSelectStore} onPreview={onPreviewStore} onInvite={onInvite} onSettings={onSettings} /></motion.div>)}
-              </motion.div>
-          </div>
-        )}
-      </motion.div>
     </motion.div>
   );
 };
 
-
-const ManageSitesPage: React.FC<ManageSitesPageProps> = ({ ownedStores, collaboratingStores, setActiveStoreId, users, setUsers, allStoresData, setAllStoresData }) => {
+const ManageSitesPage: React.FC<ManageSitesPageProps> = ({ currentUser, ownedStores, collaboratingStores, setActiveStoreId, users, setUsers, allStoresData, setAllStoresData }) => {
   const navigate = useNavigate();
   const [storeToEdit, setStoreToEdit] = useState<Store | null>(null);
   const [storeToInvite, setStoreToInvite] = useState<Store | null>(null);
   const [specializationFilter, setSpecializationFilter] = useState('all');
 
+  const isAdminView = currentUser?.isAdmin;
+
+  const allPlatformStores = useMemo(() => {
+    if (!isAdminView) return [];
+    return users.flatMap(user => 
+        user.stores?.map(store => ({ store, ownerName: user.fullName })) || []
+    ).filter(item => !item.ownerName.toLowerCase().includes('admin')); // Filter out admin user's stores
+  }, [isAdminView, users]);
+
   const allSpecializations = useMemo(() => {
-    const allStores = [...ownedStores, ...collaboratingStores];
-    return [...new Set(allStores.map(s => s.specialization))];
-  }, [ownedStores, collaboratingStores]);
+    const storesForSpec = isAdminView ? allPlatformStores.map(item => item.store) : [...ownedStores, ...collaboratingStores];
+    return [...new Set(storesForSpec.map(s => s.specialization))];
+  }, [isAdminView, allPlatformStores, ownedStores, collaboratingStores]);
 
   const filteredOwnedStores = useMemo(() => ownedStores.filter(s => specializationFilter === 'all' || s.specialization === specializationFilter), [ownedStores, specializationFilter]);
   const filteredCollaboratingStores = useMemo(() => collaboratingStores.filter(s => specializationFilter === 'all' || s.specialization === specializationFilter), [collaboratingStores, specializationFilter]);
+  const filteredAdminStores = useMemo(() => allPlatformStores.filter(({ store }) => specializationFilter === 'all' || store.specialization === specializationFilter), [allPlatformStores, specializationFilter]);
 
   const handleSelectStore = (storeId: string) => {
     setActiveStoreId(storeId);
@@ -192,23 +136,93 @@ const ManageSitesPage: React.FC<ManageSitesPageProps> = ({ ownedStores, collabor
     setStoreToInvite(null);
   };
 
-  if ((ownedStores.length + collaboratingStores.length) === 0) {
+  if ((ownedStores.length + collaboratingStores.length) === 0 && !isAdminView) {
     return <CreateSiteView />;
   }
   
   return (
     <>
-      <ManageStoresView 
-          myStores={filteredOwnedStores} 
-          collaboratingStores={filteredCollaboratingStores} 
-          onSelectStore={handleSelectStore} 
-          onPreviewStore={handlePreviewStore}
-          onInvite={setStoreToInvite}
-          onSettings={setStoreToEdit}
-          allSpecializations={allSpecializations}
-          filter={specializationFilter}
-          setFilter={setSpecializationFilter}
-      />
+      <motion.div 
+          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" 
+          dir="rtl"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+      >
+        <motion.div variants={itemVariants} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm p-6 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 dark:text-white">إدارة المتاجر</h1>
+            <p className="text-slate-500 dark:text-slate-400 mt-1">
+                {isAdminView ? "تحكم كامل في جميع المتاجر الموجودة على المنصة." : "يمكنك من لوحة التحكم إدارة وحذف أو ترقية أو ضبط الإعدادات لأي من متاجرك على الإنترنت."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+              <div className="relative">
+                  <Filter size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                  <select value={specializationFilter} onChange={e => setSpecializationFilter(e.target.value)} className="appearance-none w-full sm:w-48 pr-10 pl-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                      <option value="all">كل التخصصات</option>
+                      {allSpecializations.map(spec => <option key={spec} value={spec}>{spec}</option>)}
+                  </select>
+                  <ChevronsUpDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+              </div>
+              {!isAdminView && (
+                  <Link to="/create-store" className="flex items-center justify-center gap-2 bg-teal-500 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-teal-600 transition-all shadow-md active:scale-95">
+                      <Plus size={20} /> أنشئ متجرك
+                  </Link>
+              )}
+          </div>
+        </motion.div>
+        
+        <motion.div variants={itemVariants} className="space-y-12">
+            {isAdminView ? (
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-700 dark:text-white mb-6">كل متاجر المنصة ({filteredAdminStores.length})</h2>
+                    {filteredAdminStores.length > 0 ? (
+                        <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {filteredAdminStores.map(({ store, ownerName }) => 
+                                <StoreCard key={store.id} store={store} ownerName={ownerName} onSelect={handleSelectStore} onPreview={handlePreviewStore} onInvite={setStoreToInvite} onSettings={setStoreToEdit} />
+                            )}
+                        </motion.div>
+                    ) : (
+                        <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
+                            <Inbox size={40} className="text-slate-300 dark:text-slate-600 mb-3" />
+                            <h3 className="font-bold text-lg text-slate-600 dark:text-slate-300">لا توجد متاجر على المنصة بعد.</h3>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <>
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-700 dark:text-white mb-6">متاجري</h2>
+                        {filteredOwnedStores.length > 0 ? (
+                            <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {filteredOwnedStores.map(store => 
+                                    <StoreCard key={store.id} store={store} onSelect={handleSelectStore} onPreview={handlePreviewStore} onInvite={setStoreToInvite} onSettings={setStoreToEdit} />
+                                )}
+                            </motion.div>
+                        ) : (
+                            <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
+                                <Inbox size={40} className="text-slate-300 dark:text-slate-600 mb-3" />
+                                <h3 className="font-bold text-lg text-slate-600 dark:text-slate-300">ليس لديك أي متاجر بعد.</h3>
+                                <p className="text-sm">ابدأ بإنشاء متجرك الأول لتعرضه هنا.</p>
+                            </div>
+                        )}
+                    </div>
+                    {collaboratingStores.length > 0 && (
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-700 dark:text-white mb-6">متاجر متعاون بها</h2>
+                            <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {filteredCollaboratingStores.map(store => 
+                                    <StoreCard key={store.id} store={store} onSelect={handleSelectStore} onPreview={handlePreviewStore} onInvite={setStoreToInvite} onSettings={setStoreToEdit} />
+                                )}
+                            </motion.div>
+                        </div>
+                    )}
+                </>
+            )}
+        </motion.div>
+      </motion.div>
+      
       {storeToEdit && <StoreSettingsModal store={storeToEdit} onClose={() => setStoreToEdit(null)} onSave={handleSaveSettings} />}
       {storeToInvite && <InviteEmployeeModal store={storeToInvite} onClose={() => setStoreToInvite(null)} onInvite={handleInvite} users={users} />}
     </>

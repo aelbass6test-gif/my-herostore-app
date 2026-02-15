@@ -1,8 +1,14 @@
 
 
 
+
+
+
+
+
 import { useState, useMemo, useEffect } from 'react';
-import { HashRouter, Routes, Route, Outlet, useNavigate, useParams } from 'react-router-dom';
+// FIX: The `Navigate` component was not imported, causing an error. It has been added to the import statement.
+import { HashRouter, Routes, Route, Outlet, useNavigate, useParams, Navigate } from 'react-router-dom';
 
 import { User, Store, StoreData, Order, Settings, Wallet, OrderItem, Employee, Product, PlaceOrderData } from './types';
 import * as db from './services/databaseService';
@@ -58,6 +64,7 @@ import CongratsModal from './components/CongratsModal';
 import OrderTrackingPage from './components/OrderTrackingPage';
 import OtpVerificationPage from './components/OtpVerificationPage';
 import IosInstallPrompt from './components/IosInstallPrompt';
+import ComingSoonPage from './components/ComingSoonPage';
 
 interface EmployeeRegisterRequestData {
   fullName: string;
@@ -93,6 +100,15 @@ const MainLayout = ({ currentUser, handleLogout, isSidebarOpen, setSidebarOpen, 
         </div>
     );
 };
+
+const AdminLayout = ({ currentUser, handleLogout, theme, setTheme }: any) => (
+    <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-200" dir="rtl">
+        <Header currentUser={currentUser} onLogout={handleLogout} theme={theme} setTheme={setTheme} onToggleSidebar={() => {}} />
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            <Outlet />
+        </main>
+    </div>
+);
 
 const EmployeeLayoutWrapper = ({ children, ...props }: any) => {
     return <EmployeeLayout {...props}>{children}</EmployeeLayout>;
@@ -163,9 +179,16 @@ export const AppComponent = () => {
             let loadedUsers: User[] = globalData?.users || [];
 
             if (loadedUsers.length === 0) {
-                const defaultOwner: User = { fullName: 'مستخدم تجريبي', phone: '01000000000', password: 'password', email: 'test@example.com', stores: [], joinDate: new Date().toISOString() };
-                const defaultEmployee: User = { fullName: 'احمد محمد', phone: '01064527923', password: 'password', email: 'abdooads003@gmail.com', joinDate: new Date().toISOString() };
-                loadedUsers.push(defaultOwner, defaultEmployee);
+                const adminUser: User = { 
+                    fullName: 'المدير العام', 
+                    phone: 'admin', 
+                    password: 'admin', 
+                    email: 'admin@example.com', 
+                    stores: [], 
+                    joinDate: new Date().toISOString(),
+                    isAdmin: true 
+                };
+                loadedUsers.push(adminUser);
             }
 
             setUsers(loadedUsers);
@@ -218,6 +241,8 @@ export const AppComponent = () => {
                 const savedSessionType = localStorage.getItem('sessionType');
                 if (savedSessionType === 'employee') {
                     navigate('/employee/dashboard');
+                } else if (savedSessionType === 'admin') {
+                    navigate('/admin');
                 } else {
                     navigate('/');
                 }
@@ -283,17 +308,28 @@ export const AppComponent = () => {
             setCurrentUser(user);
             setIsEmployeeSession(false);
             localStorage.setItem('currentUserPhone', user.phone);
-            localStorage.setItem('sessionType', 'owner');
-    
-            const lastStoreId = localStorage.getItem('lastActiveStoreId');
-            const firstStoreId = user.stores?.[0]?.id;
             
-            if (lastStoreId && user.stores?.some(s => s.id === lastStoreId)) {
-                handleSetActiveStore(lastStoreId);
-            } else if (firstStoreId) {
-                handleSetActiveStore(firstStoreId);
+            if (user.isAdmin) {
+                localStorage.setItem('sessionType', 'admin');
+                setActiveStoreId(null);
+                localStorage.removeItem('lastActiveStoreId');
+                navigate('/admin');
+            } else {
+                localStorage.setItem('sessionType', 'owner');
+                const lastStoreId = localStorage.getItem('lastActiveStoreId');
+                const firstStoreId = user.stores?.[0]?.id;
+                
+                if (lastStoreId && user.stores?.some(s => s.id === lastStoreId)) {
+                    handleSetActiveStore(lastStoreId);
+                    navigate('/');
+                } else if (firstStoreId) {
+                    handleSetActiveStore(firstStoreId);
+                    navigate('/');
+                } else {
+                    setActiveStoreId(null); // No stores, so no active store
+                    navigate('/create-store');
+                }
             }
-            navigate('/');
         }
     
         setUserForOtp(null);
@@ -446,6 +482,11 @@ export const AppComponent = () => {
         return { success: result.success, error: result.error };
     };
 
+    const handleImpersonate = (userToImpersonate: User) => {
+        console.log(`Impersonating user: ${userToImpersonate.fullName}`);
+        completeLogin(userToImpersonate, null); 
+    };
+
     if (!authChecked) {
         return <GlobalLoader />;
     }
@@ -462,13 +503,25 @@ export const AppComponent = () => {
     // Props passed down to layouts and pages
     const pageProps = {
         users, setUsers, allStoresData, setAllStoresData, currentUser, activeStore,
-        orders: allStoresData[activeStoreId!]?.orders || [],
-        settings: allStoresData[activeStoreId!]?.settings || INITIAL_SETTINGS,
-        wallet: allStoresData[activeStoreId!]?.wallet || { balance: 0, transactions: [] },
+        orders: activeStoreId ? allStoresData[activeStoreId]?.orders || [] : [],
+        settings: activeStoreId ? allStoresData[activeStoreId]?.settings || INITIAL_SETTINGS : INITIAL_SETTINGS,
+        wallet: activeStoreId ? allStoresData[activeStoreId]?.wallet || { balance: 0, transactions: [] } : { balance: 0, transactions: [] },
         cart,
-        setOrders: (updater: any) => setAllStoresData(p => ({...p, [activeStoreId!]: {...p[activeStoreId!], orders: typeof updater === 'function' ? updater(p[activeStoreId!].orders) : updater }})),
-        setSettings: (updater: any) => setAllStoresData(p => ({...p, [activeStoreId!]: {...p[activeStoreId!], settings: typeof updater === 'function' ? updater(p[activeStoreId!].settings) : updater }})),
-        setWallet: (updater: any) => setAllStoresData(p => ({...p, [activeStoreId!]: {...p[activeStoreId!], wallet: typeof updater === 'function' ? updater(p[activeStoreId!].wallet) : updater }})),
+        setOrders: (updater: any) => {
+            if(activeStoreId) {
+                setAllStoresData(p => ({...p, [activeStoreId]: {...p[activeStoreId], orders: typeof updater === 'function' ? updater(p[activeStoreId].orders) : updater }}))
+            }
+        },
+        setSettings: (updater: any) => {
+            if(activeStoreId) {
+                setAllStoresData(p => ({...p, [activeStoreId]: {...p[activeStoreId], settings: typeof updater === 'function' ? updater(p[activeStoreId].settings) : updater }}))
+            }
+        },
+        setWallet: (updater: any) => {
+             if(activeStoreId) {
+                setAllStoresData(p => ({...p, [activeStoreId]: {...p[activeStoreId], wallet: typeof updater === 'function' ? updater(p[activeStoreId].wallet) : updater }}))
+            }
+        },
     };
     
     return (
@@ -478,6 +531,12 @@ export const AppComponent = () => {
                 <Route path="/employee-login" element={<EmployeeLoginPage allStoresData={allStoresData} users={users} onLoginAttempt={handleEmployeeLogin} onRegisterRequest={handleEmployeeRegisterRequest} />} />
                 <Route path="/track-order" element={<OrderTrackingPage orders={pageProps.orders} />} />
                 
+                <Route path="/admin" element={<AdminLayout currentUser={currentUser} handleLogout={handleLogout} theme={theme} setTheme={setTheme} />}>
+                    <Route index element={<AdminPage {...pageProps} onImpersonate={handleImpersonate} currentUser={currentUser as User} />} />
+                    <Route path="manage-stores" element={<ManageSitesPage ownedStores={currentUser?.stores || []} collaboratingStores={[]} setActiveStoreId={handleSetActiveStore} {...pageProps} />} />
+                    <Route path="account-settings" element={<AccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
+                </Route>
+
                 <Route path="/employee" element={
                     <EmployeeLayoutWrapper 
                         currentUser={currentUser} onLogout={handleLogout}
@@ -529,12 +588,26 @@ export const AppComponent = () => {
                     <Route path="team-chat" element={<TeamChatPage {...pageProps} activeStoreId={activeStoreId} />} />
                     <Route path="whatsapp" element={<WhatsAppPage {...pageProps} />} />
                     <Route path="account-settings" element={<AccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
+                    
+                    {/* Coming Soon Routes */}
+                    <Route path="product-attributes" element={<ComingSoonPage />} />
+                    <Route path="withdrawals" element={<ComingSoonPage />} />
+                    <Route path="design-templates" element={<ComingSoonPage />} />
+                    <Route path="domain" element={<ComingSoonPage />} />
+                    <Route path="legal-pages" element={<ComingSoonPage />} />
+                    <Route path="apps" element={<ComingSoonPage />} />
+                    <Route path="settings/tax" element={<ComingSoonPage />} />
+                    <Route path="settings/developer" element={<ComingSoonPage />} />
                 </Route>
 
                 <Route path="store" element={<StorefrontPage {...pageProps} onAddToCart={() => {}} onUpdateCartQuantity={() => {}} onRemoveFromCart={() => {}} />} />
                 <Route path="checkout" element={<CheckoutPage {...pageProps} onPlaceOrder={() => '123'} />} />
                 <Route path="order-success/:orderId" element={<OrderSuccessPage {...pageProps} />} />
-                <Route path="*" element={<MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme}><Dashboard {...pageProps}/></MainLayout>} />
+                <Route path="*" element={
+                    currentUser?.isAdmin 
+                        ? <Navigate to="/admin" /> 
+                        : <MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme}><Dashboard {...pageProps}/></MainLayout>
+                } />
             </Routes>
             {showCongratsModal && <CongratsModal onClose={() => setShowCongratsModal(false)} />}
         </>

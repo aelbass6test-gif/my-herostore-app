@@ -1,4 +1,3 @@
-
 // FIX: Import 'useMemo' from 'react' to resolve 'Cannot find name' error.
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -25,6 +24,8 @@ const PATH_TITLES: { [key: string]: string } = {
     '/activity-logs': 'سجل النشاط',
     '/settings': 'الإعدادات العامة',
     '/settings/employees': 'الموظفون',
+    '/admin/account-settings': 'إعدادات الحساب',
+    '/account-settings': 'إعدادات الحساب',
 };
 
 interface HeaderProps {
@@ -40,6 +41,14 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onToggleSidebar,
     const userMenuRef = useRef<HTMLDivElement>(null);
     const location = useLocation();
     const navigate = useNavigate();
+
+    const handleManageStoresClick = () => {
+        if (currentUser?.isAdmin) {
+            navigate('/admin/manage-stores');
+        } else {
+            navigate('/manage-stores');
+        }
+    };
 
     const pageTitle = useMemo(() => {
         const path = location.pathname;
@@ -80,7 +89,7 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onToggleSidebar,
 
             <div className="flex items-center gap-4">
                 <button 
-                    onClick={() => navigate('/manage-stores')}
+                    onClick={handleManageStoresClick}
                     className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-bold text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
                 >
                     <Replace size={16} />
@@ -104,7 +113,7 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onToggleSidebar,
                                 <p className="font-bold text-sm text-slate-800 dark:text-white truncate">{currentUser?.fullName}</p>
                                 <p className="text-xs text-slate-500 truncate">{currentUser?.email}</p>
                             </div>
-                            <Link to="/account-settings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">
+                            <Link to={currentUser?.isAdmin ? "/admin/account-settings" : "/account-settings"} onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">
                                 <UserIcon size={16} /> <span>ملفي الشخصي</span>
                             </Link>
                             <a href="https://docs.wuilt.com" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">

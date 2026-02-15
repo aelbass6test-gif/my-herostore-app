@@ -1,7 +1,9 @@
 
+
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, Employee, Permission, PERMISSIONS, User, Store } from '../types';
-import { Users, UserPlus, UserCog, Trash2, XCircle, KeyRound, AlertCircle, Check, Clock } from 'lucide-react';
+import { Users, UserPlus, UserCog, Trash2, XCircle, KeyRound, AlertCircle, Check, Clock, Copy, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const containerVariants = {
@@ -58,14 +60,15 @@ interface EmployeesPageProps {
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
   currentUser: User | null;
   users: User[];
+  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   activeStoreId: string | null;
 }
 
-const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, currentUser, users, activeStoreId }) => {
+const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, currentUser, users, setUsers, activeStoreId }) => {
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteError, setInviteError] = useState('');
-  const [inviteSuccess, setInviteSuccess] = useState('');
+  const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  const [addEmployeeError, setAddEmployeeError] = useState('');
+  const [newEmployeeCredentials, setNewEmployeeCredentials] = useState<{ phone: string, pass: string } | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
 
@@ -88,34 +91,35 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
     setEmployeeToDelete(null);
   };
   
-  const handleInviteEmployee = (email: string) => {
-    setInviteError('');
-    setInviteSuccess('');
-    const userToInvite = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const handleAddEmployee = (data: { name: string; phone: string; email: string; password: string; }) => {
+    setAddEmployeeError('');
+    setNewEmployeeCredentials(null);
 
-    if (!userToInvite) {
-      setInviteError('لم يتم العثور على مستخدم بهذا البريد. تم إرسال دعوة له للانضمام للمنصة. يرجى إعادة دعوته بعد إنشاء حسابه.');
-      return;
+    if (users.some(u => u.phone === data.phone || u.email === data.email)) {
+        setAddEmployeeError('مستخدم بهذا الهاتف أو البريد الإلكتروني موجود بالفعل.');
+        return;
     }
 
-    const isAlreadyEmployee = settings.employees.some(emp => emp.id === userToInvite.phone);
-    if (isAlreadyEmployee) {
-      setInviteError('هذا المستخدم هو بالفعل موظف في هذا المتجر.');
-      return;
-    }
-    
-    const newEmployee: Employee = {
-      id: userToInvite.phone,
-      name: userToInvite.fullName,
-      email: userToInvite.email,
-      permissions: [], // Start with no permissions
-      status: 'invited',
+    const newUser: User = {
+        fullName: data.name,
+        phone: data.phone,
+        email: data.email,
+        password: data.password,
+        joinDate: new Date().toISOString()
     };
+    setUsers(prev => [...prev, newUser]);
 
+    const newEmployee: Employee = {
+        id: data.phone,
+        name: data.name,
+        email: data.email,
+        permissions: [],
+        status: 'active'
+    };
     setSettings(s => ({ ...s, employees: [...s.employees, newEmployee] }));
-    setInviteSuccess(`تم إرسال دعوة إلى ${userToInvite.fullName} بنجاح!`);
-    setIsInviteModalOpen(false);
-    setTimeout(() => setInviteSuccess(''), 4000);
+
+    setNewEmployeeCredentials({ phone: data.phone, pass: data.password });
+    setIsAddEmployeeModalOpen(false);
   };
   
   const handleRequestAction = (employeeId: string, action: 'accept' | 'decline') => {
@@ -140,12 +144,17 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
         animate="visible"
     >
       <motion.div variants={itemVariants}>
-        {inviteSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-3 text-sm text-emerald-800 dark:text-emerald-300 font-bold animate-in fade-in duration-300"><Check size={20} /><span>{inviteSuccess}</span></div>}
+        {newEmployeeCredentials && (
+            <CredentialsModal 
+                credentials={newEmployeeCredentials}
+                onClose={() => setNewEmployeeCredentials(null)}
+            />
+        )}
       </motion.div>
       <motion.div variants={itemVariants}>
         <PermissionsCard 
             employees={settings.employees || []}
-            onAdd={() => setIsInviteModalOpen(true)}
+            onAdd={() => setIsAddEmployeeModalOpen(true)}
             onEdit={(emp) => { setEditingEmployee(emp); setIsEmployeeModalOpen(true); }}
             onDelete={(emp) => setEmployeeToDelete(emp)}
             onRequestAction={handleRequestAction}
@@ -163,11 +172,11 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
         />
       )}
       
-      {isInviteModalOpen && (
-        <InviteModal 
-          onClose={() => { setIsInviteModalOpen(false); setInviteError(''); }}
-          onInvite={handleInviteEmployee}
-          error={inviteError}
+      {isAddEmployeeModalOpen && (
+        <AddEmployeeModal 
+          onClose={() => { setIsAddEmployeeModalOpen(false); setAddEmployeeError(''); }}
+          onAdd={handleAddEmployee}
+          error={addEmployeeError}
         />
       )}
 
@@ -198,7 +207,7 @@ const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEd
           </div>
         </div>
         <button onClick={onAdd} className="flex items-center gap-2 bg-purple-600 text-white px-6 py-2.5 rounded-xl font-black shadow-lg shadow-purple-100 dark:shadow-none hover:bg-purple-700 active:scale-95 transition-all">
-          <UserPlus size={20} /> دعوة موظف
+          <UserPlus size={20} /> إضافة موظف
         </button>
       </div>
       
@@ -389,14 +398,23 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
   );
 };
 
-interface InviteModalProps { onClose: () => void; onInvite: (email: string) => void; error: string; }
-const InviteModal: React.FC<InviteModalProps> = ({ onClose, onInvite, error }) => {
+interface AddEmployeeModalProps { onClose: () => void; onAdd: (data: { name: string, phone: string, email: string, password: string }) => void; error: string; }
+const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({ onClose, onAdd, error }) => {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  
+  const generateRandomPassword = () => Math.random().toString(36).slice(-8);
+
+  useEffect(() => {
+    setPassword(generateRandomPassword());
+  }, []);
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.trim()) {
-      onInvite(email);
+    if (name.trim() && phone.trim() && email.trim() && password.trim()) {
+      onAdd({ name, phone, email, password });
     }
   };
 
@@ -404,29 +422,53 @@ const InviteModal: React.FC<InviteModalProps> = ({ onClose, onInvite, error }) =
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/70 dark:bg-black/90 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl p-8 text-right border border-slate-300 dark:border-slate-800">
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
-          <h3 className="text-xl font-black dark:text-white">دعوة موظف</h3>
+          <h3 className="text-xl font-black dark:text-white">إضافة موظف جديد</h3>
           <button onClick={onClose}><XCircle className="text-slate-400 hover:text-red-500"/></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="invite-email" className="text-sm font-bold text-slate-700 dark:text-slate-400">البريد الإلكتروني للموظف</label>
-            <input 
-              id="invite-email" type="email" required value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="example@mail.com"
-              className="mt-2 w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <p className="text-xs text-slate-500 mt-2">إذا لم يكن المستخدم مسجلاً، سيتم إرسال دعوة له للانضمام إلى المنصة.</p>
-          </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={onClose} className="px-6 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg font-bold">إلغاء</button>
-            <button type="submit" className="px-6 py-2 bg-purple-600 text-white rounded-lg font-bold">إرسال دعوة</button>
-          </div>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder="الاسم الكامل" className="w-full p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none"/>
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="رقم الهاتف (لتسجيل الدخول)" className="w-full p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none"/>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="البريد الإلكتروني" className="w-full p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none"/>
+            <div className="relative">
+                <input type="text" value={password} onChange={e => setPassword(e.target.value)} required placeholder="كلمة المرور المؤقتة" className="w-full p-3 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-purple-500 outline-none font-mono"/>
+                <button type="button" onClick={() => setPassword(generateRandomPassword())} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-purple-500"><RefreshCw size={16}/></button>
+            </div>
+            {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+            <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={onClose} className="px-6 py-2 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg font-bold">إلغاء</button>
+                <button type="submit" className="px-6 py-2 bg-purple-600 text-white rounded-lg font-bold">إضافة الموظف</button>
+            </div>
         </form>
       </div>
     </div>
   );
 };
+
+interface CredentialsModalProps { credentials: { phone: string, pass: string }, onClose: () => void; }
+const CredentialsModal: React.FC<CredentialsModalProps> = ({ credentials, onClose }) => {
+    const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl p-6 text-center">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><Check size={32}/></div>
+                <h3 className="text-xl font-bold dark:text-white">تمت الإضافة بنجاح!</h3>
+                <p className="text-sm text-slate-500 mb-4">شارك بيانات الدخول التالية مع الموظف.</p>
+                <div className="space-y-3 text-right">
+                    <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                        <label className="text-xs text-slate-400 font-bold">رقم الهاتف</label>
+                        <div className="flex justify-between items-center"><span className="font-mono font-bold text-lg dark:text-white">{credentials.phone}</span><button onClick={() => copyToClipboard(credentials.phone)}><Copy size={16}/></button></div>
+                    </div>
+                     <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                        <label className="text-xs text-slate-400 font-bold">كلمة المرور</label>
+                        <div className="flex justify-between items-center"><span className="font-mono font-bold text-lg dark:text-white">{credentials.pass}</span><button onClick={() => copyToClipboard(credentials.pass)}><Copy size={16}/></button></div>
+                    </div>
+                </div>
+                <button onClick={onClose} className="w-full mt-6 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg font-bold">إغلاق</button>
+            </div>
+        </div>
+    );
+};
+
 
 interface DeleteConfirmModalProps { title: string; desc: string; onConfirm: () => void; onCancel: () => void; }
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ title, desc, onConfirm, onCancel }) => ( <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/70 dark:bg-black/90 backdrop-blur-sm"> <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl p-8 text-center animate-in zoom-in duration-200 border border-slate-300 dark:border-slate-800"> <div className="w-20 h-20 bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-100 dark:border-red-900"><AlertCircle size={40} /></div> <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-3 uppercase tracking-tight">{title}</h3> <p className="text-slate-600 dark:text-slate-400 text-sm mb-8 leading-relaxed font-bold">{desc}</p> <div className="flex flex-col gap-3"> <button onClick={onConfirm} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black shadow-xl hover:bg-red-700 transition-all active:scale-95">تأكيد الحذف</button> <button onClick={onCancel} className="w-full py-4 text-slate-500 dark:text-slate-400 font-black hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all">تراجع</button> </div> </div> </div> );

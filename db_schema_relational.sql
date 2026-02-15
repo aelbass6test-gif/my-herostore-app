@@ -1,8 +1,21 @@
-
 -- =================================================================
--- ||      ULTIMATE RELATIONAL DATABASE SCHEMA (17 TABLES)        ||
+-- ||      ULTIMATE RELATIONAL DATABASE SCHEMA (18 TABLES)        ||
 -- ||      Covers ALL App Pages & Features                        ||
 -- =================================================================
+
+-- 0. Users Table (NEW)
+create table if not exists public.users (
+  phone text primary key,
+  full_name text,
+  password text,
+  email text unique,
+  is_admin boolean default false,
+  is_banned boolean default false,
+  join_date text,
+  stores jsonb,
+  sites jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 
 -- 1. Main Store Data
 create table if not exists public.stores_data (
@@ -222,6 +235,7 @@ create table if not exists public.chat_messages (
 );
 
 -- Enable RLS for ALL tables
+alter table public.users enable row level security;
 alter table public.stores_data enable row level security;
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
@@ -242,11 +256,13 @@ alter table public.shipping_integrations enable row level security;
 alter table public.chat_messages enable row level security;
 
 -- Cleanup policies
+drop policy if exists "Public Access" on public.users;
 drop policy if exists "Public Access" on public.stores_data;
 drop policy if exists "Public Access" on public.products;
 -- (Repeat for all if needed, omitted for brevity as 'create policy' handles new)
 
 -- Create permissive policies
+create policy "Public Access Users" on public.users for all using (true) with check (true);
 create policy "Public Access Stores" on public.stores_data for all using (true) with check (true);
 create policy "Public Access Products" on public.products for all using (true) with check (true);
 create policy "Public Access Orders" on public.orders for all using (true) with check (true);
@@ -267,7 +283,7 @@ create policy "Public Access ShippingInt" on public.shipping_integrations for al
 create policy "Public Access Chat" on public.chat_messages for all using (true) with check (true);
 
 -- Grant permissions
-grant all on table public.stores_data, public.products, public.orders, public.transactions, public.suppliers, public.supply_orders, public.reviews, public.abandoned_carts, public.activity_logs, public.customers, public.employees, public.discount_codes, public.collections, public.custom_pages, public.payment_methods, public.global_options, public.shipping_integrations, public.chat_messages to anon, authenticated, service_role;
+grant all on table public.users, public.stores_data, public.products, public.orders, public.transactions, public.suppliers, public.supply_orders, public.reviews, public.abandoned_carts, public.activity_logs, public.customers, public.employees, public.discount_codes, public.collections, public.custom_pages, public.payment_methods, public.global_options, public.shipping_integrations, public.chat_messages to anon, authenticated, service_role;
 
 -- Enable Realtime for Chat
 alter publication supabase_realtime add table public.chat_messages;

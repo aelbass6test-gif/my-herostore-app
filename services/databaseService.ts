@@ -1,6 +1,8 @@
 
 
 
+
+
 import { supabase } from './supabaseClient';
 import { Store, StoreData, User, Product, Order, Transaction, Supplier, SupplyOrder, Review, AbandonedCart, ActivityLog, Employee, DiscountCode, Collection, CustomPage, PaymentMethod, CustomerProfile, GlobalOption, ShippingCarrierIntegration } from '../types';
 import { INITIAL_SETTINGS } from '../constants';
@@ -537,14 +539,62 @@ function parseDate(dateStr: string): Date {
     return new Date(); 
 }
 
-// --- Legacy / Global Data Functions ---
+// --- Global/User Data Functions ---
 
-export const getGlobalData = async () => {
-    return fetchLegacyDocument('global') || {};
+const getUsers = async (): Promise<User[]> => {
+    const { data, error } = await supabase.from('users').select('*');
+    if (error) {
+        console.error("Error fetching users from relational table:", error);
+        // Fallback to legacy
+        const legacyData = await fetchLegacyDocument('global');
+        return legacyData?.users || [];
+    }
+    // Map from db columns to User type
+    return (data || []).map((u: any) => ({
+        phone: u.phone,
+        fullName: u.full_name,
+        password: u.password,
+        email: u.email,
+        isAdmin: u.is_admin,
+        isBanned: u.is_banned,
+        joinDate: u.join_date,
+        stores: u.stores || [],
+        sites: u.sites || []
+    }));
+};
+
+const saveUsers = async (users: User[]): Promise<{ success: boolean }> => {
+    const payload = users.map(u => ({
+        phone: u.phone,
+        full_name: u.fullName,
+        password: u.password,
+        email: u.email,
+        is_admin: u.isAdmin,
+        is_banned: u.isBanned,
+        join_date: u.joinDate,
+        stores: u.stores || [],
+        sites: u.sites || []
+    }));
+
+    const { error } = await supabase.from('users').upsert(payload, { onConflict: 'phone' });
+    if (error) {
+        console.error("Error saving users to relational table:", error);
+        // Fallback to legacy
+        await saveDocumentLegacy('global', { users });
+        return { success: false };
+    }
+    return { success: true };
+};
+
+export const getGlobalData = async (): Promise<{ users: User[], loyaltyData: Record<string, number> }> => {
+    const users = await getUsers();
+    return { users: users || [], loyaltyData: {} };
 };
 
 export const saveGlobalData = async (data: { users: User[], loyaltyData: Record<string, number> }) => {
-    return saveDocumentLegacy('global', data);
+    saveLocal('global', data); // Keep local backup
+    await saveUsers(data.users);
+    // Note: loyaltyData is derived and doesn't need to be saved globally.
 };
 
 export const migrateAllLegacyDataToRelational = async (users: User[]): Promise<{ success: boolean, error?: string, summary: string }> => {
