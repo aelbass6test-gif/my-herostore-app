@@ -351,7 +351,6 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
     }
 };
 
-// FIX: Implement saveStoreData to resolve export error and add return statements to satisfy the function's type.
 export const saveStoreData = async (store: Store, data: StoreData): Promise<{ success: boolean, error?: string }> => {
     saveLocal(store.id, data);
 
@@ -366,6 +365,34 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
         } = data.settings;
         
         const { orders = [], wallet = { balance: 0, transactions: [] }, customers = [] } = data;
+        
+        // --- Handle Deletions First (Sync Logic) ---
+        // The current 'upsert' logic doesn't delete records removed from the UI. This fixes it for employees.
+        const { data: currentDbEmployees, error: fetchError } = await supabase
+            .from('employees')
+            .select('phone')
+            .eq('store_id', store.id);
+            
+        if (fetchError) {
+            throw new Error(`Sync Error: Could not fetch employees for deletion check. ${fetchError.message}`);
+        }
+        
+        const dbEmployeePhones = currentDbEmployees.map(e => e.phone);
+        const stateEmployeePhones = new Set(employees.map(e => e.id)); // In state, employee 'id' is their phone number.
+        const employeesToDelete = dbEmployeePhones.filter(phone => !stateEmployeePhones.has(phone));
+
+        if (employeesToDelete.length > 0) {
+            const { error: deleteError } = await supabase
+                .from('employees')
+                .delete()
+                .eq('store_id', store.id)
+                .in('phone', employeesToDelete);
+            
+            if (deleteError) {
+                throw new Error(`Sync Error: Could not delete employees. ${deleteError.message}`);
+            }
+        }
+        // --- End of Deletion Logic ---
 
         const saveArray = async (table: string, payload: any[], onConflict: string = 'id') => {
             if (payload && payload.length > 0) {
