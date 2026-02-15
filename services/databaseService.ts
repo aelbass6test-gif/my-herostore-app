@@ -178,7 +178,6 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
             customerName: o.customer_name,
             status: o.status,
             date: o.date,
-            total_price: o.total_price,
             ...o.details
         }));
 
@@ -230,7 +229,7 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
 
         const activityLogs: ActivityLog[] = (activityLogsRes.data || []).map((l: any) => ({
             id: l.id,
-            user: l.user,
+            user: l.user_name,
             action: l.action,
             details: l.details,
             timestamp: l.timestamp,
@@ -382,27 +381,28 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
             return { id, store_id: store.id, name, sku, price, stock_quantity: stockQuantity, details };
         });
         const ordersPayload = orders.map(o => {
-            const { id, orderNumber, customerName, status, date, productPrice, ...details } = o;
-            return { id, store_id: store.id, order_number: orderNumber, customer_name: customerName, status, date, total_price: productPrice, details };
+            const { id, orderNumber, customerName, status, date, ...details } = o;
+            const total_price = o.totalAmountOverride ?? (o.productPrice + o.shippingFee - (o.discount || 0));
+            return { id, store_id: store.id, order_number: orderNumber, customer_name: customerName, status, date, total_price, details };
         });
         const transactionsPayload = wallet.transactions.map(t => ({ id: t.id, store_id: store.id, type: t.type, amount: t.amount, date: new Date(t.date).toISOString(), category: t.category, note: t.note }));
         const suppliersPayload = suppliers.map(s => ({ ...s, store_id: store.id }));
-        const supplyOrdersPayload = supplyOrders.map(so => ({ ...so, store_id: store.id, date: new Date(so.date).toISOString() }));
-        const reviewsPayload = reviews.map(r => ({ ...r, store_id: store.id }));
+        const supplyOrdersPayload = supplyOrders.map(so => { const { supplierId, totalCost, ...rest } = so; return { ...rest, store_id: store.id, supplier_id: supplierId, total_cost: totalCost, date: new Date(so.date).toISOString() } });
+        const reviewsPayload = reviews.map(r => { const { productId, customerName, ...rest } = r; return { ...rest, store_id: store.id, product_id: productId, customer_name: customerName }; });
         const abandonedCartsPayload = abandonedCarts.map(ac => ({ id: ac.id, store_id: store.id, customer_name: ac.customerName, customer_phone: ac.customerPhone, total_value: ac.totalValue, date: ac.date, items: ac.items }));
-        const activityLogsPayload = activityLogs.map(al => ({ ...al, store_id: store.id }));
+        const activityLogsPayload = activityLogs.map(al => ({ id: al.id, store_id: store.id, user_name: al.user, action: al.action, details: al.details, timestamp: al.timestamp, date: al.date }));
         const employeesPayload = employees.map(e => ({ id: e.id, store_id: store.id, name: e.name, email: e.email, permissions: e.permissions, status: e.status }));
-        const discountsPayload = discountCodes.map(d => ({ ...d, store_id: store.id, usage_count: d.usageCount }));
+        const discountsPayload = discountCodes.map(d => { const { usageCount, ...rest } = d; return { ...rest, store_id: store.id, usage_count: usageCount }; });
         const collectionsPayload = collections.map(c => ({ ...c, store_id: store.id }));
-        const pagesPayload = customPages.map(p => ({ ...p, store_id: store.id, is_active: p.isActive }));
-        const paymentsPayload = paymentMethods.map(p => ({ ...p, store_id: store.id, logo_url: p.logoUrl }));
+        const pagesPayload = customPages.map(p => { const { isActive, ...rest } = p; return { ...rest, store_id: store.id, is_active: isActive }; });
+        const paymentsPayload = paymentMethods.map(p => { const { logoUrl, ...rest } = p; return { ...rest, store_id: store.id, logo_url: logoUrl }; });
         const customersPayload = customers.map(c => ({
             id: c.id, store_id: store.id, name: c.name, phone: c.phone, address: c.address,
             loyalty_points: c.loyaltyPoints, total_spent: c.totalSpent,
             first_order_date: c.firstOrderDate, last_order_date: c.lastOrderDate, notes: c.notes
         }));
         const globalOptionsPayload = globalOptions.map(g => ({ ...g, store_id: store.id }));
-        const shippingIntegrationsPayload = shippingIntegrations.map(si => ({ ...si, store_id: store.id, api_key: si.apiKey, api_secret: si.apiSecret, account_number: si.accountNumber, is_connected: si.isConnected }));
+        const shippingIntegrationsPayload = shippingIntegrations.map(si => { const { apiKey, apiSecret, accountNumber, isConnected, ...rest } = si; return { ...rest, store_id: store.id, api_key: apiKey, api_secret: apiSecret, account_number: accountNumber, is_connected: isConnected }; });
         
         await Promise.all([
             saveArray('products', productsPayload),

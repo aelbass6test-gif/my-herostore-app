@@ -309,14 +309,6 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUs
                   <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white rounded-lg py-3 font-bold transition-all flex items-center justify-center gap-2 mt-6 disabled:opacity-50 disabled:cursor-wait">
                       {isLoading ? <Loader2 className="animate-spin" /> : (isLoginView ? <><LogIn size={18}/> تسجيل الدخول</> : <><UserPlus size={18}/> إنشاء حساب</>)}
                   </button>
-                  {isLoginView && (
-                    <p className="text-center text-xs text-slate-500 pt-2">
-                        للتجربة: استخدم رقم 
-                        <span className="font-mono text-slate-300 mx-1">01000000000</span>
-                        وكلمة مرور
-                        <span className="font-mono text-slate-300 mx-1">password</span>
-                    </p>
-                  )}
                 </form>
                 <p className="text-center text-sm text-slate-400 mt-6">{isLoginView ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'}{' '}<a href="#" onClick={toggleView} className="font-bold text-indigo-400 hover:underline">{isLoginView ? 'أنشئ حساباً' : 'تسجيل الدخول'}</a></p>
                 <div className="mt-4 text-center"><Link to="/employee-login" className="text-sm text-slate-400 hover:text-indigo-400 hover:underline">تسجيل دخول الموظفين</Link></div>

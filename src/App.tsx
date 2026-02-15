@@ -217,41 +217,6 @@ export const AppComponent = () => {
                     isAdmin: true 
                 };
                 loadedUsers.push(adminUser);
-
-                // Add demo user and store with products
-                const demoStoreId = `store-${Date.now()}`;
-                const demoStore: Store = {
-                    id: demoStoreId,
-                    name: 'متجر وان تولز للعدد',
-                    specialization: 'أدوات كهربائية',
-                    language: 'عربي',
-                    currency: 'EGP',
-                    url: `onetoolz-demo.wuitstore.com`,
-                    creationDate: new Date().toISOString(),
-                };
-                const demoUser: User = {
-                    fullName: 'مستخدم تجريبي',
-                    phone: '01000000000',
-                    password: 'password',
-                    email: 'demo@example.com',
-                    stores: [demoStore],
-                    joinDate: new Date().toISOString(),
-                };
-                loadedUsers.push(demoUser);
-    
-                const demoStoreData: StoreData = {
-                    orders: [],
-                    settings: {
-                        ...INITIAL_SETTINGS,
-                        products: oneToolzProducts,
-                    },
-                    wallet: { balance: 0, transactions: [] },
-                    cart: [],
-                    customers: [],
-                };
-                
-                // Persist the seeded store data immediately
-                await db.saveStoreData(demoStore, demoStoreData);
             }
 
             setUsers(loadedUsers);
