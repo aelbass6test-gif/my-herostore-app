@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Settings, PlatformIntegration } from '../types';
+import { Settings, PlatformIntegration, Store } from '../types';
 import { Link2, CheckCircle2, Database, RefreshCw, AlertTriangle, Check, Trash2, XCircle, Lock, ShoppingCart, Package, Users, Wallet, Activity, Tag } from 'lucide-react';
 import { clearStoreData } from '../services/databaseService';
 
@@ -8,9 +8,10 @@ interface SettingsPageProps {
   settings: Settings;
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
   onManualSave?: () => Promise<{ success: boolean, error?: string } | void>;
+  activeStore?: Store;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ settings, setSettings, onManualSave }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ settings, setSettings, onManualSave, activeStore }) => {
   
   const handleIntegrationSave = (integration: PlatformIntegration) => {
     setSettings(prev => ({ ...prev, integration }));
@@ -42,7 +43,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, setSettings, onMa
         isEnabled={settings.enablePlatformIntegration}
         onToggle={togglePlatformIntegration}
       />
-      <DangerZone />
+      <DangerZone activeStore={activeStore} />
     </div>
   );
 };
@@ -190,15 +191,14 @@ const PlatformIntegrationCard: React.FC<PlatformIntegrationCardProps> = ({ integ
   );
 };
 
-const DangerZone: React.FC = () => {
+const DangerZone: React.FC<{ activeStore?: Store }> = ({ activeStore }) => {
     const [showConfirm, setShowConfirm] = useState(false);
-    const [pin, setPin] = useState('');
+    const [confirmationText, setConfirmationText] = useState('');
     const [error, setError] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
     const [selectedTargets, setSelectedTargets] = useState<string[]>([]);
     
-    // Hardcoded PIN for security in this context. In production, validate against user auth.
-    const MASTER_PIN = "2030";
+    const isConfirmationMatch = confirmationText === activeStore?.name;
 
     const availableTargets = [
         { id: 'orders', label: 'الطلبات والسلات', icon: <ShoppingCart size={16}/> },
@@ -222,8 +222,8 @@ const DangerZone: React.FC = () => {
     };
 
     const handleClearData = async () => {
-        if (pin !== MASTER_PIN) {
-            setError('رقم التعريف السري (PIN) غير صحيح.');
+        if (!isConfirmationMatch) {
+            setError('اسم المتجر غير متطابق.');
             return;
         }
         
@@ -263,7 +263,7 @@ const DangerZone: React.FC = () => {
                     <p className="mt-1">يمكنك اختيار حذف الطلبات، المنتجات، أو العملاء بشكل منفصل أو تصفير المتجر بالكامل.</p>
                 </div>
                 <button 
-                    onClick={() => { setShowConfirm(true); setPin(''); setError(''); setSelectedTargets([]); }} 
+                    onClick={() => { setShowConfirm(true); setConfirmationText(''); setError(''); setSelectedTargets([]); }} 
                     className="flex items-center gap-2 bg-red-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg hover:bg-red-700 active:scale-95 transition-all whitespace-nowrap"
                 >
                     <Trash2 size={18}/> تصفير البيانات
@@ -304,14 +304,13 @@ const DangerZone: React.FC = () => {
                         </div>
 
                         <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-4">
-                            <p className="text-slate-500 text-xs mb-3 font-bold">أدخل رمز الأمان (PIN) لتأكيد الحذف</p>
+                            <p className="text-slate-500 text-xs mb-3 font-bold">للتأكيد، يرجى كتابة اسم متجرك: <span className="font-black text-red-500">{activeStore?.name}</span></p>
                             <input 
-                                type="password" 
-                                className="w-full text-center text-2xl font-black tracking-widest p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-red-500"
-                                placeholder="****"
-                                maxLength={4}
-                                value={pin}
-                                onChange={(e) => setPin(e.target.value)}
+                                type="text" 
+                                className="w-full text-center text-lg font-bold p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-300 dark:border-slate-700 outline-none focus:ring-2 focus:ring-red-500"
+                                placeholder="اكتب اسم المتجر هنا"
+                                value={confirmationText}
+                                onChange={(e) => setConfirmationText(e.target.value)}
                                 autoFocus
                             />
                         </div>
@@ -321,13 +320,13 @@ const DangerZone: React.FC = () => {
                         <div className="flex gap-2">
                             <button 
                                 onClick={handleClearData} 
-                                disabled={isDeleting}
-                                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-wait"
+                                disabled={isDeleting || !isConfirmationMatch}
+                                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isDeleting ? 'جاري المسح...' : `حذف (${selectedTargets.length})`}
+                                {isDeleting ? 'جاري المسح...' : `أنا متأكد، احذف (${selectedTargets.length})`}
                             </button>
                             <button 
-                                onClick={() => { setShowConfirm(false); setPin(''); setError(''); }} 
+                                onClick={() => { setShowConfirm(false); setConfirmationText(''); setError(''); }} 
                                 className="flex-1 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600"
                             >
                                 إلغاء
@@ -348,4 +347,3 @@ const ToggleButton: React.FC<ToggleButtonProps> = ({ active, onToggle, variant =
 };
 
 export default SettingsPage;
-   

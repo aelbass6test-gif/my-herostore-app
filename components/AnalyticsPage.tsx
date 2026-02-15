@@ -1,9 +1,13 @@
 
+
+
+
+
 import React, { useState } from 'react';
 import { Order, Wallet, Settings } from '../types';
-// FIX: Aliased `LineChart` from `lucide-react` to avoid a name conflict with `recharts`.
+// FIX: Aliased `BarChart` from `lucide-react` to avoid a name conflict with `recharts`.
 import { BarChart2, Wand2, Send, BrainCircuit, AlertTriangle, PieChart as PieChartIcon, BarChart as BarChartIcon, LineChart as LineChartIcon } from 'lucide-react';
-// FIX: Imported the `LineChart` component from `recharts` which was missing.
+// FIX: Imported the `LineChart` and `Line` components from `recharts` which were missing.
 import { BarChart, Bar, PieChart, Pie, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart } from 'recharts';
 import { getAnalyticsFromAI } from '../services/geminiService';
 

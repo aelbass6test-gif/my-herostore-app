@@ -200,10 +200,7 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
     }
     
     const fullAddress = `${orderData.customerAddress}, ${orderData.buildingDetails || ''}`.trim();
-    let finalNotes = orderData.notes || '';
-    if(orderData.customerPhone2) {
-        finalNotes = `رقم هاتف إضافي: ${orderData.customerPhone2}\n${finalNotes}`;
-    }
+    const finalNotes = orderData.notes || '';
 
     const totalProductPrice = orderData.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const totalProductCost = orderData.items.reduce((sum, item) => sum + item.cost * item.quantity, 0);

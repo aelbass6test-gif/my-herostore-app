@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Store, Mail, User as UserIcon, ShieldAlert, Phone, KeyRound, LogIn, UserPlus, Loader2, X, BarChart, Settings, Users, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -55,7 +56,7 @@ const AuthModal: React.FC<{
 
 // --- Main Page Component ---
 interface SignUpPageProps {
-  onPasswordSuccess: (user: User, rememberMe: boolean) => void;
+  onPasswordSuccess: (user: User) => void;
   users: User[];
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
@@ -71,7 +72,6 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUs
   const [userPhone, setUserPhone] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPassword, setUserPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
   const [userError, setUserError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -100,7 +100,7 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUs
     if (isLoginView) {
       const foundUser = users.find(user => user.phone === userPhone && user.password === userPassword);
       if (foundUser) {
-        onPasswordSuccess(foundUser, rememberMe);
+        onPasswordSuccess(foundUser);
       } else {
         setUserError('رقم الموبايل أو كلمة المرور غير صحيحة.');
         setIsLoading(false);
@@ -130,7 +130,7 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUs
 
       const newUser: User = { fullName, phone: userPhone, password: userPassword, email: userEmail, stores: [], joinDate: new Date().toISOString() };
       setUsers(prevUsers => [...prevUsers, newUser]);
-      onPasswordSuccess(newUser, true);
+      onPasswordSuccess(newUser);
     }
   };
 
@@ -141,7 +141,7 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUs
     const adminUser = users.find(user => user.phone === adminPhone && user.isAdmin);
 
     if (adminUser && adminPassword === adminUser.password) {
-        onPasswordSuccess(adminUser, true);
+        onPasswordSuccess(adminUser);
     } else {
         setAdminError('بيانات دخول المدير غير صحيحة.');
         setIsLoading(false);
@@ -307,7 +307,6 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUs
                   )}
                   <div className="relative"><Phone size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="tel" placeholder="رقم الموبايل" required className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={userPhone} onChange={(e) => setUserPhone(e.target.value)} /></div>
                   <div className="relative"><KeyRound size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"/><input type="password" placeholder="كلمة المرور" required className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-10 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" value={userPassword} onChange={(e) => setUserPassword(e.target.value)} /></div>
-                  {isLoginView && <div className="flex items-center justify-between"><label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer"><input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="rounded border-slate-600 bg-slate-800/50 text-indigo-500 focus:ring-indigo-500"/> تذكرني</label></div>}
                   {userError && <div className="bg-red-900/50 border border-red-700 text-red-300 p-3 rounded-lg text-center font-bold text-sm">{userError}</div>}
                   <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white rounded-lg py-3 font-bold transition-all flex items-center justify-center gap-2 mt-6 disabled:opacity-50 disabled:cursor-wait">
                       {isLoading ? <Loader2 className="animate-spin" /> : (isLoginView ? <><LogIn size={18}/> تسجيل الدخول</> : <><UserPlus size={18}/> إنشاء حساب</>)}

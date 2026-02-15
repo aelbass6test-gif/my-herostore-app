@@ -1,4 +1,8 @@
 
+
+
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 // FIX: Import 'OrderStatus' type to resolve 'Cannot find name' error.
 import { Order, User, ConfirmationLog, OrderStatus, Settings } from '../types';
@@ -21,12 +25,35 @@ interface ConfirmationQueuePageProps {
   settings: Settings;
 }
 
+// FIX: Moved helper components before the main component to ensure they are defined before use, resolving potential scoping issues.
+interface DetailSectionProps {
+    title: string;
+    children: React.ReactNode;
+}
+
+const DetailSection = ({ title, children }: DetailSectionProps) => (
+    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+        <h4 className="font-bold text-slate-600 dark:text-slate-400 mb-3 text-sm">{title}</h4>
+        <div className="space-y-3">{children}</div>
+    </div>
+);
+
+const DetailItem = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) => (
+    <div className="space-y-1">
+        <label className="text-xs text-slate-500 flex items-center gap-1">{icon} {label}</label>
+        <p className="font-bold text-sm text-slate-800 dark:text-white">{value}</p>
+    </div>
+);
+
+
 const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, setOrders, currentUser, settings }) => {
     const [activeOrder, setActiveOrder] = useState<Order | null>(null);
     const [actionNotes, setActionNotes] = useState('');
     const [selectedAction, setSelectedAction] = useState(CONFIRMATION_ACTIONS[0]);
     const [isEditingAddress, setIsEditingAddress] = useState(false);
     const [editedAddress, setEditedAddress] = useState('');
+    const [isEditingPhone2, setIsEditingPhone2] = useState(false);
+    const [editedPhone2, setEditedPhone2] = useState('');
 
     const pendingOrders = useMemo(() =>
         orders.filter(o => o.status === 'في_انتظار_المكالمة').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
@@ -78,8 +105,10 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
         setActionNotes('');
         setSelectedAction(CONFIRMATION_ACTIONS[0]);
         setIsEditingAddress(false);
+        setIsEditingPhone2(false);
         if (order) {
             setEditedAddress(order.customerAddress);
+            setEditedPhone2(order.customerPhone2 || '');
         }
     };
     
@@ -129,6 +158,15 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
             currentOrders.map(o => o.id === activeOrderId ? { ...o, customerAddress: editedAddress } : o)
         );
         setIsEditingAddress(false);
+    };
+    
+    const handleSavePhone2 = () => {
+        if (!activeOrder) return;
+        const activeOrderId = activeOrder.id;
+        setOrders(currentOrders => 
+            currentOrders.map(o => o.id === activeOrderId ? { ...o, customerPhone2: editedPhone2 } : o)
+        );
+        setIsEditingPhone2(false);
     };
     
     const totalAmount = useMemo(() => {
@@ -197,6 +235,25 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                                         <DetailItem icon={<UserIcon size={14}/>} label="الاسم" value={activeOrder.customerName} />
                                         <DetailItem icon={<Phone size={14}/>} label="الهاتف" value={activeOrder.customerPhone} />
                                         <div className="space-y-1">
+                                            <label className="text-xs text-slate-500 flex items-center gap-1"><Phone size={14}/> هاتف إضافي</label>
+                                            {isEditingPhone2 ? (
+                                                <div className="flex gap-2">
+                                                    <input type="tel" value={editedPhone2} onChange={e => setEditedPhone2(e.target.value)} className="w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md text-sm font-bold" placeholder="أضف رقم هاتف آخر..."/>
+                                                    <button onClick={handleSavePhone2} className="p-2 bg-emerald-100 text-emerald-600 rounded-md"><Save size={16}/></button>
+                                                    <button type="button" onClick={() => setIsEditingPhone2(false)} className="p-2 bg-slate-100 text-slate-600 rounded-md"><X size={16}/></button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-start justify-between">
+                                                    {activeOrder.customerPhone2 ? (
+                                                        <p className="font-bold text-sm text-slate-800 dark:text-white pr-4">{activeOrder.customerPhone2}</p>
+                                                    ) : (
+                                                        <p className="text-sm text-slate-400 italic pr-4">لا يوجد</p>
+                                                    )}
+                                                    <button onClick={() => { setIsEditingPhone2(true); setEditedPhone2(activeOrder.customerPhone2 || ''); }} className="p-1 text-slate-400 hover:text-blue-500"><Edit3 size={14}/></button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="space-y-1">
                                             <label className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={14}/> العنوان</label>
                                             {isEditingAddress ? (
                                                 <div className="flex gap-2">
@@ -235,7 +292,6 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                                     <a href={getWhatsAppLink(activeOrder.customerPhone, activeOrder.customerName)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 text-white p-3 rounded-lg font-bold hover:bg-emerald-600"><MessageSquare size={16}/> واتساب</a>
                                 </div>
                                 
-                                {/* Confirmation Log */}
                                 <DetailSection title="سجل المتابعة">
                                     {(activeOrder.confirmationLogs || []).length > 0 ? (
                                         <div className="space-y-3 max-h-40 overflow-y-auto">
@@ -279,19 +335,4 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
         </div>
     );
 };
-
-const DetailSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
-    <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-        <h4 className="font-bold text-slate-600 dark:text-slate-400 mb-3 text-sm">{title}</h4>
-        <div className="space-y-3">{children}</div>
-    </div>
-);
-
-const DetailItem = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) => (
-    <div className="space-y-1">
-        <label className="text-xs text-slate-500 flex items-center gap-1">{icon} {label}</label>
-        <p className="font-bold text-sm text-slate-800 dark:text-white">{value}</p>
-    </div>
-);
-
 export default ConfirmationQueuePage;

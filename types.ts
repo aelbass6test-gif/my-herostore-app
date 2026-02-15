@@ -5,6 +5,8 @@
 
 
 
+
+
 // ... (previous imports and declartions)
 
 // FIX: Declaring the 'google' object in the global scope to make it accessible across all files.
@@ -344,6 +346,7 @@ export interface Order {
   shippingArea: string;
   customerName: string;
   customerPhone: string;
+  customerPhone2?: string;
   customerAddress: string;
   notes?: string;
   items: OrderItem[];

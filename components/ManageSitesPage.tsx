@@ -1,9 +1,10 @@
 
+
 import React, { useState, useMemo } from 'react';
 // FIX: Using useNavigate for v6 compatibility.
 import { Link, useNavigate } from 'react-router-dom';
 // FIX: Replaced non-existent 'Devices' icon from lucide-react with 'MonitorSmartphone'.
-import { ArrowLeft, Plus, ShoppingCart, Crown, ExternalLink, Inbox, Eye, UserPlus, Settings as SettingsIcon, XCircle, Send, Filter, ChevronsUpDown, Save, Store as StoreIconLucide, Tag } from 'lucide-react';
+import { ArrowLeft, Plus, ShoppingCart, Crown, ExternalLink, Inbox, Eye, UserPlus, Settings as SettingsIcon, XCircle, Send, Filter, ChevronsUpDown, Save, Store as StoreIconLucide, Tag, MonitorSmartphone } from 'lucide-react';
 import { User, Store, StoreData, Employee } from '../types';
 import { motion } from 'framer-motion';
 
