@@ -1,10 +1,10 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Search, Trash2, Edit3, ChevronDown, Package, MapPin, Coins, FileSearch, AlertCircle, ShieldCheck, ShieldAlert, Banknote, ShoppingBag, Save, XCircle, Info, User, Building, Download, Filter, Truck, CheckCircle, RefreshCcw, Briefcase, ChevronLeft, ChevronRight, MoreVertical, Percent, Lock, Unlock, Receipt, AlertTriangle, MessageCircle, Printer, Wand2, FileText, Phone, Archive, ArrowRightLeft, Image as ImageIcon, FileDown } from 'lucide-react';
 import { Order, Settings, OrderStatus, Wallet, Transaction, PaymentStatus, PreparationStatus, OrderItem, Product, CustomerProfile, Store } from '../types';
 import { ORDER_STATUSES } from '../constants';
 import { motion, Variants } from 'framer-motion';
 import { generateInvoiceHTML } from '../utils/invoiceGenerator';
+import { generateShippingLabelHTML } from '../utils/shippingLabelGenerator';
 import { generateShippingNote } from '../services/geminiService';
 import { calculateCodFee } from '../utils/financials';
 import { generateOrdersReportHTML } from '../utils/reportGenerator';
@@ -478,13 +478,28 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
     };
 
   const handlePrintInvoice = (order: Order) => {
-    const html = generateInvoiceHTML(order, settings, settings.products[0]?.name || 'المتجر');
+    const html = generateInvoiceHTML(order, settings, activeStore?.name || 'متجري');
     const win = window.open('', '_blank');
     if (win) {
         win.document.write(html);
         win.document.close();
     } else {
         alert("يرجى السماح بالنوافذ المنبثقة لطباعة الفاتورة.");
+    }
+  };
+
+  const handlePrintShippingLabel = (order: Order) => {
+    if (!activeStore) {
+        alert("لا يمكن طباعة البوليصة: اسم المتجر غير معروف.");
+        return;
+    }
+    const html = generateShippingLabelHTML(order, activeStore.name);
+    const win = window.open('', '_blank');
+    if (win) {
+        win.document.write(html);
+        win.document.close();
+    } else {
+        alert("يرجى السماح بالنوافذ المنبثقة لطباعة البوليصة.");
     }
   };
 
@@ -680,7 +695,7 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {paginatedOrders.map(order => (
-                <OrderRow key={order.id} order={order} onStatusChange={updateOrderStatus} onPaymentChange={handlePaymentStatusChange} onPreparationChange={(id, val) => updateOrderField(id, 'preparationStatus', val)} onEdit={() => { setEditingOrder({ ...order }); setShowAddModal(true); }} onDelete={() => setOrderToDelete(order)} onPrint={() => handlePrintInvoice(order)} isSelected={selectedOrders.includes(order.id)} onSelectRow={() => handleSelectRow(order.id)} settings={settings} whatsappLink={getWhatsAppLink(order)} onReturn={handlePostCollectionReturn} onExchange={handleStartExchange} />
+                <OrderRow key={order.id} order={order} onStatusChange={updateOrderStatus} onPaymentChange={handlePaymentStatusChange} onPreparationChange={(id, val) => updateOrderField(id, 'preparationStatus', val)} onEdit={() => { setEditingOrder({ ...order }); setShowAddModal(true); }} onDelete={() => setOrderToDelete(order)} onPrintInvoice={() => handlePrintInvoice(order)} onPrintShippingLabel={() => handlePrintShippingLabel(order)} isSelected={selectedOrders.includes(order.id)} onSelectRow={() => handleSelectRow(order.id)} settings={settings} whatsappLink={getWhatsAppLink(order)} onReturn={handlePostCollectionReturn} onExchange={handleStartExchange} />
             ))}
             </tbody>
           </table>
@@ -691,7 +706,7 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
             {paginatedOrders.length > 0 ? (
                 <div className="p-4 space-y-4">
                     {paginatedOrders.map(order => (
-                         <OrderCard key={order.id} order={order} onStatusChange={updateOrderStatus} onPaymentChange={handlePaymentStatusChange} onPreparationChange={(id, val) => updateOrderField(id, 'preparationStatus', val)} onEdit={() => { setEditingOrder({ ...order }); setShowAddModal(true); }} onDelete={() => setOrderToDelete(order)} onPrint={() => handlePrintInvoice(order)} isSelected={selectedOrders.includes(order.id)} onSelectRow={() => handleSelectRow(order.id)} settings={settings} whatsappLink={getWhatsAppLink(order)} onReturn={handlePostCollectionReturn} onExchange={handleStartExchange} />
+                         <OrderCard key={order.id} order={order} onStatusChange={updateOrderStatus} onPaymentChange={handlePaymentStatusChange} onPreparationChange={(id, val) => updateOrderField(id, 'preparationStatus', val)} onEdit={() => { setEditingOrder({ ...order }); setShowAddModal(true); }} onDelete={() => setOrderToDelete(order)} onPrintInvoice={() => handlePrintInvoice(order)} onPrintShippingLabel={() => handlePrintShippingLabel(order)} isSelected={selectedOrders.includes(order.id)} onSelectRow={() => handleSelectRow(order.id)} settings={settings} whatsappLink={getWhatsAppLink(order)} onReturn={handlePostCollectionReturn} onExchange={handleStartExchange} />
                     ))}
                 </div>
             ) : (
@@ -722,8 +737,8 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
   );
 };
 
-interface OrderRowProps { order: Order; onStatusChange: (id: string, newStatus: OrderStatus) => void; onPaymentChange: (order: Order, newPaymentStatus: PaymentStatus) => void; onPreparationChange: (id: string, newStatus: PreparationStatus) => void; onEdit: () => void; onDelete: () => void; onPrint: () => void; isSelected: boolean; onSelectRow: () => void; settings: Settings; whatsappLink: string; onReturn: (order: Order) => void; onExchange: (order: Order) => void; }
-const OrderRow: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentChange, onPreparationChange, onEdit, onDelete, onPrint, isSelected, onSelectRow, whatsappLink, onReturn, onExchange }) => {
+interface OrderRowProps { order: Order; onStatusChange: (id: string, newStatus: OrderStatus) => void; onPaymentChange: (order: Order, newPaymentStatus: PaymentStatus) => void; onPreparationChange: (id: string, newStatus: PreparationStatus) => void; onEdit: () => void; onDelete: () => void; onPrintInvoice: () => void; onPrintShippingLabel: () => void; isSelected: boolean; onSelectRow: () => void; settings: Settings; whatsappLink: string; onReturn: (order: Order) => void; onExchange: (order: Order) => void; }
+const OrderRow: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentChange, onPreparationChange, onEdit, onDelete, onPrintInvoice, onPrintShippingLabel, isSelected, onSelectRow, whatsappLink, onReturn, onExchange }) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     useEffect(() => { const handleClickOutside = (e: MouseEvent) => { if(menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
@@ -750,7 +765,7 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentCha
             <td className="p-4"><div className="relative group"><select value={order.status} onChange={(e) => onStatusChange(order.id, e.target.value as OrderStatus)} className={`appearance-none w-36 text-right cursor-pointer text-xs font-black px-3 py-2 rounded-lg border transition-all ${statusColors[order.status]}`}>{ORDER_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}</select><ChevronDown size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-current opacity-50 pointer-events-none"/></div></td>
             <td className="p-4"><select value={order.preparationStatus} onChange={(e) => onPreparationChange(order.id, e.target.value as PreparationStatus)} className={`appearance-none w-36 text-right cursor-pointer text-xs font-black px-3 py-2 rounded-lg border ${order.preparationStatus === 'جاهز' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{PREPARATION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></td>
             <td className="p-4"><div className="relative group"><select value={order.paymentStatus} onChange={(e) => onPaymentChange(order, e.target.value as PaymentStatus)} className={`appearance-none w-36 text-right cursor-pointer text-xs font-black px-3 py-2 rounded-lg border transition-all ${paymentStatusColors[order.paymentStatus]}`} disabled={order.paymentStatus === 'مدفوع' || order.status !== 'تم_توصيلها'}>{PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select><ChevronDown size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-current opacity-50 pointer-events-none"/></div></td>
-            <td className="p-4"><div className="flex items-center gap-1"><button onClick={onPrint} className="p-2 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 rounded-lg transition-colors" title="طباعة الفاتورة"><Printer size={16}/></button><button onClick={onEdit} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-colors"><Edit3 size={16}/></button><button onClick={onDelete} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"><Trash2 size={16}/></button>
+            <td className="p-4"><div className="flex items-center gap-1"><button onClick={onPrintShippingLabel} className="p-2 text-slate-400 hover:text-gray-600 dark:hover:text-gray-400 rounded-lg transition-colors" title="طباعة بوليصة الشحن"><FileText size={16}/></button><button onClick={onPrintInvoice} className="p-2 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 rounded-lg transition-colors" title="طباعة الفاتورة"><Printer size={16}/></button><button onClick={onEdit} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg transition-colors"><Edit3 size={16}/></button><button onClick={onDelete} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"><Trash2 size={16}/></button>
             {['تم_توصيلها', 'تم_التحصيل'].includes(order.status) && (
                 <div className="relative" ref={menuRef}>
                     <button onClick={() => setMenuOpen(p => !p)} className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg"><MoreVertical size={16}/></button>
@@ -766,7 +781,8 @@ const OrderRow: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentCha
         </tr>
     );
 };
-const OrderCard: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentChange, onPreparationChange, onEdit, onDelete, onPrint, isSelected, onSelectRow, whatsappLink, onReturn, onExchange }) => {
+interface OrderCardProps extends OrderRowProps {}
+const OrderCard: React.FC<OrderCardProps> = ({ order, onStatusChange, onPaymentChange, onPreparationChange, onEdit, onDelete, onPrintInvoice, onPrintShippingLabel, isSelected, onSelectRow, whatsappLink, onReturn, onExchange }) => {
     const statusColors: Record<OrderStatus, string> = { في_انتظار_المكالمة: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', جاري_المراجعة: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400 border-purple-200 dark:border-purple-800', قيد_التنفيذ: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800', تم_الارسال: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400 border-sky-200 dark:border-sky-800', قيد_الشحن: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400 border-blue-200 dark:border-blue-800', تم_توصيلها: 'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-400 border-teal-200 dark:border-teal-800', تم_التحصيل: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', مرتجع: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800', مرتجع_بعد_الاستلام: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400 border-orange-200 dark:border-orange-800', تم_الاستبدال: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-600', مرتجع_جزئي: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-400 border-orange-200 dark:border-orange-800', فشل_التوصيل: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800', ملغي: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700', مؤرشف: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700' };
     const paymentStatusColors: Record<PaymentStatus, string> = { 'بانتظار الدفع': 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 border-amber-200 dark:border-amber-800', 'مدفوع': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800', 'مدفوع جزئياً': 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-400 border-sky-200 dark:border-sky-800', 'مرتجع': 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400 border-red-200 dark:border-red-800' };
 
@@ -782,6 +798,7 @@ const OrderCard: React.FC<OrderRowProps> = ({ order, onStatusChange, onPaymentCh
                 </div>
                  <div className="flex items-center gap-1">
                     <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="p-2 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-full" title="مراسلة واتساب"><MessageCircle size={16} /></a>
+                    <button onClick={onPrintShippingLabel} className="p-2 text-slate-400 hover:text-gray-600 dark:hover:text-gray-400 rounded-lg transition-colors" title="طباعة بوليصة الشحن"><FileText size={16}/></button>
                     <button onClick={onEdit} className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg transition-colors"><Edit3 size={16}/></button>
                     <button onClick={onDelete} className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"><Trash2 size={16}/></button>
                 </div>

@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Package, CheckCircle2, Wallet as WalletIcon, Truck, RefreshCcw, FileSearch, Check, PlayCircle, X, AlertTriangle, ArrowRight, Lightbulb, Loader, BrainCircuit, PhoneForwarded, PieChart as ChartIcon } from 'lucide-react';
@@ -64,8 +63,8 @@ const StatusDistribution = ({ data }: { data: { name: string, value: number, col
 };
 
 const SmartSuggestions = ({ orders, settings }: { orders: Order[], settings: Settings }) => {
-    const [suggestions, setSuggestions] = useState('اضغط على زر التحديث للحصول على اقتراحات ذكية من مساعد الذكاء الاصطناعي.');
-    const [isLoading, setIsLoading] = useState(false);
+    const [suggestions, setSuggestions] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
 
     const customers = useMemo(() => {
         const customerMap = new Map<string, Pick<CustomerProfile, 'name' | 'successfulOrders' | 'totalSpent'>>();
@@ -93,7 +92,7 @@ const SmartSuggestions = ({ orders, settings }: { orders: Order[], settings: Set
     };
 
     useEffect(() => {
-        // fetchSuggestions(); // Removed to prevent automatic API calls and rate limiting.
+        fetchSuggestions();
     }, []);
 
     return (

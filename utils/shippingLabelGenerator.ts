@@ -1,4 +1,3 @@
-
 import { Order } from '../types';
 
 export const generateShippingLabelHTML = (order: Order, storeName: string) => {

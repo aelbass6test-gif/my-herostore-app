@@ -7,6 +7,7 @@ import * as db from './services/databaseService';
 import { supabase } from './services/supabaseClient';
 import { INITIAL_SETTINGS } from './constants';
 import GlobalSaveIndicator, { SaveStatus } from './components/GlobalSaveIndicator';
+import { oneToolzProducts } from './data/one-toolz-products';
 
 // Page Components (will be loaded via router)
 import SignUpPage from './components/SignUpPage';
@@ -166,10 +167,12 @@ export const AppComponent = () => {
                 
                 setSaveStatus('success');
                 setSaveMessage('تم الحفظ بنجاح!');
+                setTimeout(() => setSaveStatus('idle'), 2000);
 
             } catch (e: any) {
                 setSaveStatus('error');
                 setSaveMessage(e.message || 'فشل الحفظ');
+                setTimeout(() => setSaveStatus('idle'), 3000);
             }
         }, 2500); // 2.5-second debounce period
 
@@ -214,6 +217,41 @@ export const AppComponent = () => {
                     isAdmin: true 
                 };
                 loadedUsers.push(adminUser);
+
+                // Add demo user and store with products
+                const demoStoreId = `store-${Date.now()}`;
+                const demoStore: Store = {
+                    id: demoStoreId,
+                    name: 'متجر وان تولز للعدد',
+                    specialization: 'أدوات كهربائية',
+                    language: 'عربي',
+                    currency: 'EGP',
+                    url: `onetoolz-demo.wuitstore.com`,
+                    creationDate: new Date().toISOString(),
+                };
+                const demoUser: User = {
+                    fullName: 'مستخدم تجريبي',
+                    phone: '01000000000',
+                    password: 'password',
+                    email: 'demo@example.com',
+                    stores: [demoStore],
+                    joinDate: new Date().toISOString(),
+                };
+                loadedUsers.push(demoUser);
+    
+                const demoStoreData: StoreData = {
+                    orders: [],
+                    settings: {
+                        ...INITIAL_SETTINGS,
+                        products: oneToolzProducts,
+                    },
+                    wallet: { balance: 0, transactions: [] },
+                    cart: [],
+                    customers: [],
+                };
+                
+                // Persist the seeded store data immediately
+                await db.saveStoreData(demoStore, demoStoreData);
             }
 
             setUsers(loadedUsers);

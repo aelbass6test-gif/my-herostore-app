@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Store, StoreData, Employee, Permission, PERMISSIONS } from '../types';
 import { Users, Store as StoreIcon, Activity, Search, ShieldAlert, LogIn, Ban, CheckCircle, Lock, Unlock, LayoutDashboard, TrendingUp, MessageSquare, Send, UserPlus, Clock, UserCog, XCircle, KeyRound } from 'lucide-react';
@@ -20,41 +18,108 @@ const PERMISSION_GROUPS: { title: string; permissions: { key: Permission, label:
   { title: 'إعدادات المتجر', permissions: [ { key: 'SETTINGS_VIEW', label: 'عرض الإعدادات فقط' }, { key: 'SETTINGS_MANAGE', label: 'تعديل كافة إعدادات المتجر' } ] },
 ];
 
-// FIX: Added the missing UserPermissionsModal component
 const UserPermissionsModal: React.FC<{
     user: User;
     onClose: () => void;
     allStoresData: Record<string, StoreData>;
     setAllStoresData: React.Dispatch<React.SetStateAction<Record<string, StoreData>>>;
+    // FIX: Add 'users' to the props interface to match the props passed to the component.
     users: User[];
-}> = ({ user, onClose, allStoresData, setAllStoresData, users }) => {
+}> = ({ user, onClose, allStoresData, setAllStoresData }) => {
+
+    const [editingEmployee, setEditingEmployee] = useState<{ store: Store, employee: Employee } | null>(null);
+
+    const handlePermissionChange = (permission: Permission, isChecked: boolean) => {
+        if (!editingEmployee) return;
+
+        const { store, employee } = editingEmployee;
+        const newPermissions = isChecked
+            ? [...employee.permissions, permission]
+            : employee.permissions.filter(p => p !== permission);
+        
+        const updatedEmployee = { ...employee, permissions: newPermissions };
+        setEditingEmployee({ store, employee: updatedEmployee });
+
+        setAllStoresData(prevData => {
+            const storeData = prevData[store.id];
+            if (!storeData) return prevData;
+            
+            return {
+                ...prevData,
+                [store.id]: {
+                    ...storeData,
+                    settings: {
+                        ...storeData.settings,
+                        employees: storeData.settings.employees.map(e => e.id === employee.id ? updatedEmployee : e)
+                    }
+                }
+            };
+        });
+    };
     
-    // This is a complex modal. For this fix, we will provide a basic structure
-    // that allows an admin to see user's stores and employees.
-    // A full permission editing UI would be more involved.
-
-    const userStores = useMemo(() => {
-        return user.stores || [];
-    }, [user]);
-
     return (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/70 dark:bg-black/90 backdrop-blur-sm">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] text-right border border-slate-300 dark:border-slate-800">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] text-right border border-slate-300 dark:border-slate-800">
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                     <h3 className="text-xl font-black dark:text-white flex items-center gap-3">
                         <UserCog className="text-purple-600" /> إدارة صلاحيات {user.fullName}
                     </h3>
                     <button onClick={onClose}><XCircle className="text-slate-400 hover:text-red-500"/></button>
                 </div>
-                <div className="flex-1 overflow-y-auto p-8 space-y-6">
-                    <p>هنا يمكن للمدير تعديل صلاحيات الموظفين داخل كل متجر يملكه المستخدم.</p>
-                    {userStores.map(store => (
-                        <div key={store.id} className="p-4 border rounded-lg">
-                            <h4 className="font-bold">{store.name}</h4>
-                            <p className="text-sm text-slate-500">الموظفين: {allStoresData[store.id]?.settings.employees.length || 0}</p>
-                        </div>
-                    ))}
-                    {userStores.length === 0 && <p>This user does not own any stores.</p>}
+                <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Stores & Employees Column */}
+                    <div className="space-y-4">
+                        <h4 className="font-bold">متاجر المستخدم</h4>
+                        {(user.stores || []).length > 0 ? (user.stores || []).map(store => (
+                            <div key={store.id} className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl">
+                                <h5 className="font-bold text-lg text-slate-800 dark:text-white">{store.name}</h5>
+                                <div className="mt-2 space-y-2">
+                                    {(allStoresData[store.id]?.settings.employees || []).map(employee => (
+                                        <button 
+                                            key={employee.id}
+                                            onClick={() => setEditingEmployee({ store, employee })}
+                                            className={`w-full text-right p-3 rounded-lg flex items-center gap-3 transition-colors ${editingEmployee?.employee.id === employee.id ? 'bg-indigo-100 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold">{employee.name.substring(0,2)}</div>
+                                            <div>
+                                                <p className="font-bold text-sm">{employee.name}</p>
+                                                <p className="text-xs text-slate-500">{employee.email}</p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )) : <p className="text-slate-500">هذا المستخدم لا يملك أي متاجر.</p>}
+                    </div>
+
+                    {/* Permissions Column */}
+                    <div className={`p-6 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 transition-all ${!editingEmployee ? 'opacity-50' : ''}`}>
+                       {editingEmployee ? (
+                           <div>
+                               <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-4">صلاحيات {editingEmployee.employee.name}</h4>
+                               <div className="grid grid-cols-1 gap-6">
+                                  {PERMISSION_GROUPS.map(group => (
+                                      <div key={group.title}>
+                                          <h5 className="font-bold text-purple-800 dark:text-purple-400 mb-2">{group.title}</h5>
+                                          <div className="space-y-2">
+                                              {group.permissions.map(perm => (
+                                                  <label key={perm.key} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border dark:border-slate-700 cursor-pointer">
+                                                      <input type="checkbox" checked={editingEmployee.employee.permissions.includes(perm.key)} onChange={e => handlePermissionChange(perm.key, e.target.checked)} className="rounded text-purple-600 focus:ring-purple-500"/>
+                                                      <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{perm.label}</span>
+                                                  </label>
+                                              ))}
+                                          </div>
+                                      </div>
+                                  ))}
+                               </div>
+                           </div>
+                       ) : (
+                           <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                               <UserCog size={40} className="mb-2"/>
+                               <p className="font-bold">اختر موظفاً لعرض وتعديل صلاحياته.</p>
+                           </div>
+                       )}
+                    </div>
                 </div>
                  <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-t dark:border-slate-800 flex justify-end gap-3">
                     <button type="button" onClick={onClose} className="px-8 py-3 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-black">إغلاق</button>

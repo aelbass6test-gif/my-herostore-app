@@ -1,8 +1,8 @@
 import React from 'react';
-import { Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, Save } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-export type SaveStatus = 'idle' | 'saving' | 'success' | 'error';
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'success' | 'error';
 
 interface GlobalSaveIndicatorProps {
   status: SaveStatus;
@@ -11,6 +11,7 @@ interface GlobalSaveIndicatorProps {
 
 const GlobalSaveIndicator: React.FC<GlobalSaveIndicatorProps> = ({ status, message }) => {
   const statusConfig = {
+    pending: { icon: <Save size={18} className="text-slate-400" />, bg: 'bg-slate-800' },
     saving: { icon: <Loader2 className="animate-spin" size={18} />, bg: 'bg-slate-800' },
     success: { icon: <CheckCircle size={18} className="text-emerald-400" />, bg: 'bg-slate-800' },
     error: { icon: <AlertTriangle size={18} className="text-red-400" />, bg: 'bg-red-900/50' },
@@ -22,6 +23,7 @@ const GlobalSaveIndicator: React.FC<GlobalSaveIndicatorProps> = ({ status, messa
     <AnimatePresence>
       {status !== 'idle' && currentConfig && (
         <motion.div
+          key={status}
           initial={{ opacity: 0, y: 50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 50, scale: 0.9 }}

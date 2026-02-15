@@ -1,9 +1,9 @@
 -- =================================================================
 -- ||      ULTIMATE RELATIONAL DATABASE SCHEMA (18 TABLES)        ||
--- ||      Covers ALL App Pages & Features                        ||
+-- ||      Covers ALL App Pages & Features (REVISED & LINKED)     ||
 -- =================================================================
 
--- 0. Users Table (NEW)
+-- 0. Users Table (Central identity for owners and employees)
 create table if not exists public.users (
   phone text primary key,
   full_name text,
@@ -16,6 +16,7 @@ create table if not exists public.users (
   sites jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+comment on table public.users is 'Stores all user accounts, whether they are store owners or employees.';
 
 -- 1. Main Store Data
 create table if not exists public.stores_data (
@@ -29,6 +30,8 @@ create table if not exists public.stores_data (
   settings jsonb default '{}',
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
+comment on table public.stores_data is 'Core information and settings for each individual store.';
+
 
 -- 2. Products
 create table if not exists public.products (
@@ -38,7 +41,7 @@ create table if not exists public.products (
   sku text,
   price numeric,
   stock_quantity integer,
-  details jsonb default '{}',
+  details jsonb default '{}', -- Contains description, costPrice, images, variants etc.
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
@@ -51,7 +54,7 @@ create table if not exists public.orders (
   status text,
   total_price numeric,
   date timestamp with time zone,
-  details jsonb default '{}',
+  details jsonb default '{}', -- Contains items, shipping details, notes, etc.
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
@@ -79,11 +82,11 @@ create table if not exists public.suppliers (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 6. Supply Orders
+-- 6. Supply Orders (Linked to Suppliers)
 create table if not exists public.supply_orders (
   id text primary key,
   store_id text not null references public.stores_data(id) on delete cascade,
-  supplier_id text,
+  supplier_id text references public.suppliers(id) on delete set null, -- Link to supplier
   total_cost numeric,
   date timestamp with time zone,
   items jsonb default '[]',
@@ -91,11 +94,11 @@ create table if not exists public.supply_orders (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 7. Reviews
+-- 7. Reviews (Linked to Products)
 create table if not exists public.reviews (
   id text primary key,
   store_id text not null references public.stores_data(id) on delete cascade,
-  product_id text,
+  product_id text references public.products(id) on delete set null, -- Link to product
   customer_name text,
   rating integer,
   comment text,
@@ -116,11 +119,11 @@ create table if not exists public.abandoned_carts (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 9. Activity Logs
+-- 9. Activity Logs (Improved column name)
 create table if not exists public.activity_logs (
   id text primary key,
   store_id text not null references public.stores_data(id) on delete cascade,
-  "user" text,
+  user_name text, -- Changed from "user" to avoid reserved keyword conflict
   action text,
   details text,
   timestamp bigint,
@@ -144,17 +147,16 @@ create table if not exists public.customers (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 11. Employees
+-- 11. Employees (Normalized and linked to Users)
 create table if not exists public.employees (
-  id text primary key,
   store_id text not null references public.stores_data(id) on delete cascade,
-  name text,
-  email text,
-  phone text,
+  phone text not null references public.users(phone) on delete cascade, -- Link to users table
   permissions jsonb default '[]',
   status text default 'active',
-  created_at timestamp with time zone default timezone('utc'::text, now())
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  primary key (store_id, phone) -- Composite primary key
 );
+comment on table public.employees is 'Normalized table. Name and email are fetched from the users table via the phone FK.';
 
 -- 12. Discount Codes
 create table if not exists public.discount_codes (
@@ -177,6 +179,7 @@ create table if not exists public.collections (
   image text,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
+comment on table public.collections is 'Product categories/groups.';
 
 -- 14. Custom Pages
 create table if not exists public.custom_pages (
@@ -202,7 +205,7 @@ create table if not exists public.payment_methods (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 16. Global Options (New)
+-- 16. Global Options
 create table if not exists public.global_options (
   id text primary key,
   store_id text not null references public.stores_data(id) on delete cascade,
@@ -210,8 +213,9 @@ create table if not exists public.global_options (
   "values" text[],
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
+comment on table public.global_options is 'Defines reusable product options like "Size" or "Color".';
 
--- 17. Shipping Integrations (New)
+-- 17. Shipping Integrations
 create table if not exists public.shipping_integrations (
   id text primary key,
   store_id text not null references public.stores_data(id) on delete cascade,
@@ -223,17 +227,20 @@ create table if not exists public.shipping_integrations (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 18. Chat Messages (New)
+-- 18. Chat Messages (Linked to Users)
 create table if not exists public.chat_messages (
   id bigint generated by default as identity primary key,
   store_id text not null references public.stores_data(id) on delete cascade,
-  sender_id text not null,
-  receiver_id text not null,
+  sender_id text not null references public.users(phone) on delete cascade,
+  receiver_id text not null references public.users(phone) on delete cascade,
   content text not null,
   is_read boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- =================================================================
+-- ||                     SECURITY & POLICIES                     ||
+-- =================================================================
 -- Enable RLS for ALL tables
 alter table public.users enable row level security;
 alter table public.stores_data enable row level security;
@@ -255,13 +262,14 @@ alter table public.global_options enable row level security;
 alter table public.shipping_integrations enable row level security;
 alter table public.chat_messages enable row level security;
 
--- Cleanup policies
+-- Drop existing policies to prevent conflicts
 drop policy if exists "Public Access" on public.users;
 drop policy if exists "Public Access" on public.stores_data;
 drop policy if exists "Public Access" on public.products;
--- (Repeat for all if needed, omitted for brevity as 'create policy' handles new)
+-- (Repeat for all other tables as needed)
 
--- Create permissive policies
+-- Create permissive policies for development.
+-- In production, these should be changed to: using (auth.uid() = user_id)
 create policy "Public Access Users" on public.users for all using (true) with check (true);
 create policy "Public Access Stores" on public.stores_data for all using (true) with check (true);
 create policy "Public Access Products" on public.products for all using (true) with check (true);
@@ -282,11 +290,11 @@ create policy "Public Access GlobalOptions" on public.global_options for all usi
 create policy "Public Access ShippingInt" on public.shipping_integrations for all using (true) with check (true);
 create policy "Public Access Chat" on public.chat_messages for all using (true) with check (true);
 
--- Grant permissions
-grant all on table public.users, public.stores_data, public.products, public.orders, public.transactions, public.suppliers, public.supply_orders, public.reviews, public.abandoned_carts, public.activity_logs, public.customers, public.employees, public.discount_codes, public.collections, public.custom_pages, public.payment_methods, public.global_options, public.shipping_integrations, public.chat_messages to anon, authenticated, service_role;
+-- Grant permissions to roles
+grant all on all tables in schema public to anon, authenticated, service_role;
 
 -- Enable Realtime for Chat
 alter publication supabase_realtime add table public.chat_messages;
 
--- Reload Schema
+-- Reload Schema Cache for PostgREST
 NOTIFY pgrst, 'reload schema';
