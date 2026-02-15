@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo } from 'react';
 // FIX: Using useNavigate for v6 compatibility.
 import { Link, useNavigate } from 'react-router-dom';

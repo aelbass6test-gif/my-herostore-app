@@ -1,4 +1,6 @@
 
+
+
 import { supabase } from './supabaseClient';
 import { Store, StoreData, User, Product, Order, Transaction, Supplier, SupplyOrder, Review, AbandonedCart, ActivityLog, Employee, DiscountCode, Collection, CustomPage, PaymentMethod, CustomerProfile, GlobalOption, ShippingCarrierIntegration } from '../types';
 import { INITIAL_SETTINGS } from '../constants';
@@ -544,6 +546,55 @@ export const getGlobalData = async () => {
 export const saveGlobalData = async (data: { users: User[], loyaltyData: Record<string, number> }) => {
     return saveDocumentLegacy('global', data);
 };
+
+export const migrateAllLegacyDataToRelational = async (users: User[]): Promise<{ success: boolean, error?: string, summary: string }> => {
+    try {
+        console.log("Starting full legacy data migration...");
+        // 1. Get all legacy documents
+        const { data: documents, error: fetchError } = await supabase.from('documents').select('id, content');
+        if (fetchError) throw fetchError;
+        if (!documents) return { success: true, summary: "No legacy documents found.", error: undefined };
+
+        let migratedStores = 0;
+        let errors: string[] = [];
+
+        const allStores: { store: Store, owner: User }[] = users.flatMap(u => u.stores?.map(s => ({ store: s, owner: u })) || []);
+
+        for (const doc of documents) {
+            if (doc.id === 'global' || !doc.content || !doc.content.settings) {
+                console.log(`Skipping non-store document: ${doc.id}`);
+                continue;
+            }
+
+            const storeData = doc.content as StoreData;
+            const storeInfo = allStores.find(s => s.store.id === doc.id);
+
+            if (storeInfo) {
+                console.log(`Migrating store: ${storeInfo.store.name} (${storeInfo.store.id})`);
+                const result = await saveStoreData(storeInfo.store, storeData);
+                if (result.success) {
+                    migratedStores++;
+                } else {
+                    const errorMsg = `Failed to migrate ${storeInfo.store.id}: ${result.error}`;
+                    console.error(errorMsg);
+                    errors.push(errorMsg);
+                }
+            } else {
+                console.warn(`Could not find owner/store info for store ID: ${doc.id}. Skipping migration.`);
+            }
+        }
+
+        const summary = `Migration complete. Migrated ${migratedStores} stores. Encountered ${errors.length} errors.`;
+        console.log(summary);
+        if (errors.length > 0) console.error("Migration errors:", errors);
+
+        return { success: errors.length === 0, summary, error: errors.join('\n') };
+    } catch (err: any) {
+        console.error("Critical migration failure:", err);
+        return { success: false, summary: "Migration failed.", error: err.message };
+    }
+};
+
 
 const fetchLegacyDocument = async (key: string) => {
     try {

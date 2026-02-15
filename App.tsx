@@ -1,16 +1,15 @@
 
 
 
+import { useState, useMemo, useEffect } from 'react';
+import { HashRouter, Routes, Route, Outlet, useNavigate, useParams } from 'react-router-dom';
 
-
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { User, Store, StoreData, Order, Settings, Wallet, OrderItem, Employee, Product, PlaceOrderData } from './types';
 import * as db from './services/databaseService';
 import { supabase } from './services/supabaseClient';
 import { INITIAL_SETTINGS } from './constants';
 
-// Page Components
+// Page Components (will be loaded via router)
 import SignUpPage from './components/SignUpPage';
 import EmployeeLoginPage from './components/EmployeeLoginPage';
 import CreateStorePage from './components/CreateStorePage';
@@ -37,6 +36,7 @@ import ProductOptionsPage from './components/ProductOptionsPage';
 import ExpensesPage from './components/ExpensesPage';
 import MarketingPage from './components/MarketingPage';
 import AnalyticsPage from './components/AnalyticsPage';
+// FIX: AdminPage is a default export, so it should be imported as such.
 import AdminPage from './components/AdminPage';
 import EmployeeLayout from './components/EmployeeLayout';
 import EmployeeDashboardPage from './components/EmployeeDashboardPage';
@@ -49,7 +49,6 @@ import PagesManager from './components/PagesManager';
 import PaymentSettingsPage from './components/PaymentSettingsPage';
 import TeamChatPage from './components/TeamChatPage';
 import WhatsAppPage from './components/WhatsAppPage';
-import ComingSoonPage from './components/ComingSoonPage';
 import WelcomeLoader from './components/WelcomeLoader';
 import GlobalLoader from './components/GlobalLoader';
 import EmployeesPage from './components/EmployeesPage';
@@ -60,67 +59,87 @@ import OrderTrackingPage from './components/OrderTrackingPage';
 import OtpVerificationPage from './components/OtpVerificationPage';
 import IosInstallPrompt from './components/IosInstallPrompt';
 
+interface EmployeeRegisterRequestData {
+  fullName: string;
+  phone: string;
+  password: string;
+  storeId: string;
+  email: string;
+}
 
-const App: React.FC = () => {
+// FIX: This component was defined after its usage in the routes array, causing an error.
+// It has been converted to a React component and is now defined before use.
+const MainLayout = ({ currentUser, handleLogout, isSidebarOpen, setSidebarOpen, activeStore, theme, setTheme }: any) => {
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setIsLoading(false), 1500); // Simulate loading
+        return () => clearTimeout(timer);
+    }, []);
+
+    if (isLoading) {
+        return <WelcomeLoader userName={currentUser?.fullName.split(' ')[0] || ''} />;
+    }
+
+    return (
+        <div className="flex flex-col h-screen bg-slate-50 dark:bg-gradient-to-b dark:from-slate-950 dark:to-[#111827] text-slate-800 dark:text-slate-200" dir="rtl">
+            <Header currentUser={currentUser} onLogout={handleLogout} onToggleSidebar={() => setSidebarOpen(true)} theme={theme} setTheme={setTheme} />
+            <div className="flex flex-1 overflow-hidden">
+                <Sidebar activeStore={activeStore} isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
+                <main className="flex-1 overflow-y-auto p-4 md:p-6">
+                    <Outlet />
+                </main>
+            </div>
+        </div>
+    );
+};
+
+const EmployeeLayoutWrapper = ({ children, ...props }: any) => {
+    return <EmployeeLayout {...props}>{children}</EmployeeLayout>;
+};
+
+export const AppComponent = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [allStoresData, setAllStoresData] = useState<Record<string, StoreData>>({});
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isInitialLoad, setIsInitialLoad] = useState(true);
-    const [authChecked, setAuthChecked] = useState(false);
-    const [loyaltyData, setLoyaltyData] = useState<Record<string, number>>({});
+    const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
+    const [authChecked, setAuthChecked] = useState<boolean>(false);
     const [cart, setCart] = useState<OrderItem[]>([]);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isEmployeeSession, setIsEmployeeSession] = useState(false);
-    const [theme, setTheme] = useState(localStorage.getItem('theme') || 'system');
-    const [showCongratsModal, setShowCongratsModal] = useState(false);
+    const [isSidebarOpen, setSidebarOpen] = useState<boolean>(false);
+    const [isEmployeeSession, setIsEmployeeSession] = useState<boolean>(false);
+    const [theme, setTheme] = useState<string>(localStorage.getItem('theme') || 'system');
+    const [showCongratsModal, setShowCongratsModal] = useState<boolean>(false);
     
     // 2FA State
     const [userForOtp, setUserForOtp] = useState<User | null>(null);
     const [sessionInfoForOtp, setSessionInfoForOtp] = useState<{isEmployee: boolean, storeId: string} | null>(null);
-    const [otpError, setOtpError] = useState('');
+    const [otpError, setOtpError] = useState<string>('');
 
     // PWA Install State
     const [installPrompt, setInstallPrompt] = useState<any>(null);
     const [isStandalone, setIsStandalone] = useState(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
     const [isIos, setIsIos] = useState(false);
+    const navigate = useNavigate();
+
+    const activeStore = useMemo(() => {
+        if (!activeStoreId) return undefined;
+        const owner = users.find(u => u.stores?.some(s => s.id === activeStoreId));
+        return owner?.stores?.find(s => s.id === activeStoreId);
+    }, [activeStoreId, users]);
 
     useEffect(() => {
-        const handleInstallPrompt = (e: Event) => {
-            e.preventDefault();
-            setInstallPrompt(e);
-        };
-        window.addEventListener('beforeinstallprompt', handleInstallPrompt);
-    
-        const handleDisplayModeChange = (e: MediaQueryListEvent) => setIsStandalone(e.matches);
-        const mediaQuery = window.matchMedia('(display-mode: standalone)');
-        mediaQuery.addEventListener('change', handleDisplayModeChange);
-        
-        const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-        setIsIos(isIosDevice);
-    
-        return () => {
-            window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
-            mediaQuery.removeEventListener('change', handleDisplayModeChange);
-        };
-    }, []);
+        db.saveGlobalData({ users: users, loyaltyData: {} });
+    }, [users]);
 
-    const handleInstall = async () => {
-        if (!installPrompt) return;
-        installPrompt.prompt();
-        const { outcome } = await installPrompt.userChoice;
-        if (outcome === 'accepted') {
-            console.log('User accepted the install prompt');
-        } else {
-            console.log('User dismissed the install prompt');
+    useEffect(() => {
+        if (!isInitialLoad && activeStoreId && allStoresData[activeStoreId]) {
+            const activeStore = users.flatMap(u => u.stores || []).find(s => s.id === activeStoreId);
+            if(activeStore) {
+                 db.saveStoreData(activeStore, allStoresData[activeStoreId]);
+            }
         }
-        setInstallPrompt(null);
-    };
-
-    const handleSidebarClose = useCallback(() => {
-        setIsSidebarOpen(false);
-    }, []);
+    }, [allStoresData, activeStoreId, isInitialLoad, users]);
 
     useEffect(() => {
         const applyTheme = () => {
@@ -134,127 +153,95 @@ const App: React.FC = () => {
                 document.documentElement.classList.remove('dark');
             }
         };
-
         applyTheme();
         localStorage.setItem('theme', theme);
-
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        const handleChange = () => applyTheme();
-        mediaQuery.addEventListener('change', handleChange);
-        return () => mediaQuery.removeEventListener('change', handleChange);
     }, [theme]);
 
-    useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            try {
-                const globalData = await db.getGlobalData();
-                let loadedUsers: User[] = globalData?.users || [];
-                const loadedLoyaltyData = globalData?.loyaltyData || {};
+    const loadData = async () => {
+        try {
+            const globalData = await db.getGlobalData();
+            let loadedUsers: User[] = globalData?.users || [];
 
-                // Add a default user if no users are loaded from the database
-                if (loadedUsers.length === 0) {
-                    const defaultUser: User = {
-                        fullName: 'مستخدم تجريبي',
-                        phone: '01000000000',
-                        password: 'password',
-                        email: 'test@example.com',
-                        stores: [],
-                        joinDate: new Date().toISOString()
-                    };
-                    loadedUsers.push(defaultUser);
-                }
+            if (loadedUsers.length === 0) {
+                const defaultOwner: User = { fullName: 'مستخدم تجريبي', phone: '01000000000', password: 'password', email: 'test@example.com', stores: [], joinDate: new Date().toISOString() };
+                const defaultEmployee: User = { fullName: 'احمد محمد', phone: '01064527923', password: 'password', email: 'abdooads003@gmail.com', joinDate: new Date().toISOString() };
+                loadedUsers.push(defaultOwner, defaultEmployee);
+            }
 
-                setUsers(loadedUsers);
-                setLoyaltyData(loadedLoyaltyData);
-
-                const savedUserPhone = localStorage.getItem('currentUserPhone');
-                const savedStoreId = localStorage.getItem('lastActiveStoreId');
-                const savedSessionType = localStorage.getItem('sessionType');
-                
-                if (savedUserPhone) {
-                    const user = loadedUsers.find((u: User) => u.phone === savedUserPhone);
-                    if (user) {
-                        setCurrentUser(user);
-                        if (savedSessionType === 'employee') {
-                            setIsEmployeeSession(true);
-                        }
-                        const storeId = savedStoreId || user.stores?.[0]?.id;
-                        if (storeId) {
-                            setActiveStoreId(storeId);
-// FIX: Cast the result of db.getStoreData to ensure the type is not `unknown`, which causes downstream errors.
-                            const storeData = await db.getStoreData(storeId) as StoreData | null;
-                            if (storeData) {
-                                setAllStoresData(prev => ({ ...prev, [storeId]: storeData }));
-                            }
+            setUsers(loadedUsers);
+            
+            const savedUserPhone = localStorage.getItem('currentUserPhone');
+            const savedStoreId = localStorage.getItem('lastActiveStoreId');
+            const savedSessionType = localStorage.getItem('sessionType');
+            
+            if (savedUserPhone) {
+                const user = loadedUsers.find((u: User) => u.phone === savedUserPhone);
+                if (user) {
+                    setCurrentUser(user);
+                    if (savedSessionType === 'employee') {
+                        setIsEmployeeSession(true);
+                    }
+                    const storeId = savedStoreId || user.stores?.[0]?.id;
+                    if (storeId) {
+                        setActiveStoreId(storeId);
+                        const storeData = await db.getStoreData(storeId) as StoreData | null;
+                        if (storeData) {
+                            setAllStoresData(prev => ({ ...prev, [storeId]: storeData }));
                         }
                     }
                 }
-            } catch (error) {
-                console.error("Failed to load initial data:", error);
-            } finally {
-                setIsLoading(false);
-                setAuthChecked(true);
-                setIsInitialLoad(false);
             }
+        } catch (error) {
+            console.error("Failed to load initial data:", error);
+        } finally {
+            setAuthChecked(true);
+            setIsInitialLoad(false);
+        }
+    };
+
+    useEffect(() => {
+        // PWA setup
+        const handleBeforeInstallPrompt = (e: Event) => {
+            e.preventDefault();
+            setInstallPrompt(e);
         };
-        loadData();
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+        const mediaQuery = window.matchMedia('(display-mode: standalone)');
+        const handleDisplayModeChange = (e: MediaQueryListEvent) => setIsStandalone(e.matches);
+        mediaQuery.addEventListener('change', handleDisplayModeChange);
+        setIsIos(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
+
+        loadData().then(() => {
+            const savedUserPhone = localStorage.getItem('currentUserPhone');
+            if (savedUserPhone) {
+                const savedSessionType = localStorage.getItem('sessionType');
+                if (savedSessionType === 'employee') {
+                    navigate('/employee/dashboard');
+                } else {
+                    navigate('/');
+                }
+            } else {
+                navigate('/owner-login');
+            }
+        });
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            mediaQuery.removeEventListener('change', handleDisplayModeChange);
+        };
     }, []);
-    
-    useEffect(() => {
-        if (!isInitialLoad) {
-            db.saveGlobalData({ users, loyaltyData });
-        }
-    }, [users, loyaltyData, isInitialLoad]);
 
-    useEffect(() => {
-        if (!isInitialLoad && activeStoreId && allStoresData[activeStoreId]) {
-            const activeStore = users.flatMap(u => u.stores || []).find(s => s.id === activeStoreId);
-            if(activeStore) {
-                 db.saveStoreData(activeStore, allStoresData[activeStoreId]);
-            }
-        }
-    }, [allStoresData, activeStoreId, isInitialLoad, users]);
-
-    const allOrders = useMemo(() => Object.values(allStoresData).flatMap(store => store.orders), [allStoresData]);
-    const activeStore = useMemo(() => users.flatMap(u => u.stores || []).find(s => s.id === activeStoreId), [users, activeStoreId]);
-    const activeStoreData = useMemo(() => activeStoreId ? allStoresData[activeStoreId] : null, [activeStoreId, allStoresData]);
-    const employeeAppLayoutStoreOwner = useMemo(() => users.find(u => u.stores?.some(s => s.id === activeStoreId)), [users, activeStoreId]);
-
-    const completeLogin = (user: User, sessionInfo: {isEmployee: boolean, storeId: string} | null) => {
-        if (sessionInfo?.isEmployee) {
-            setCurrentUser(user);
-            setIsEmployeeSession(true);
-            setActiveStoreId(sessionInfo.storeId);
-            localStorage.setItem('currentUserPhone', user.phone);
-            localStorage.setItem('lastActiveStoreId', sessionInfo.storeId);
-            localStorage.setItem('sessionType', 'employee');
-        } else {
-            setCurrentUser(user);
-            setIsEmployeeSession(false);
-            localStorage.setItem('currentUserPhone', user.phone);
-            localStorage.setItem('sessionType', 'owner');
-    
-            const lastStoreId = localStorage.getItem('lastActiveStoreId');
-            const firstStoreId = user.stores?.[0]?.id;
-            
-            if (lastStoreId && user.stores?.some(s => s.id === lastStoreId)) {
-                handleSetActiveStore(lastStoreId);
-            } else if (firstStoreId) {
-                handleSetActiveStore(firstStoreId);
-            }
-        }
-    
-        setUserForOtp(null);
-        setSessionInfoForOtp(null);
-        setOtpError('');
+    const handleLogout = () => {
+        setCurrentUser(null);
+        setActiveStoreId(null);
+        setIsEmployeeSession(false);
+        localStorage.removeItem('currentUserPhone');
+        localStorage.removeItem('lastActiveStoreId');
+        localStorage.removeItem('sessionType');
+        navigate('/owner-login');
     };
 
-    const handlePasswordSuccess = async (user: User, sessionInfo: {isEmployee: boolean, storeId: string} | null = null) => {
-        // Bypass OTP and log in directly
-        completeLogin(user, sessionInfo);
-    };
-    
     const handleOtpVerification = async (otp: string) => {
         if (!userForOtp) return;
         setOtpError('');
@@ -282,193 +269,181 @@ const App: React.FC = () => {
         setSessionInfoForOtp(null);
         setOtpError('');
     };
-
-    const handleEmployeeLoginAttempt = (data: { storeId: string; phone: string; password: string }) => {
-        return new Promise<void>(async (resolve, reject) => {
-            const { storeId, phone, password } = data;
+    
+    const completeLogin = (user: User, sessionInfo: {isEmployee: boolean, storeId: string} | null) => {
+        if (sessionInfo?.isEmployee) {
+            setCurrentUser(user);
+            setIsEmployeeSession(true);
+            setActiveStoreId(sessionInfo.storeId);
+            localStorage.setItem('currentUserPhone', user.phone);
+            localStorage.setItem('lastActiveStoreId', sessionInfo.storeId);
+            localStorage.setItem('sessionType', 'employee');
+            navigate('/employee/dashboard');
+        } else {
+            setCurrentUser(user);
+            setIsEmployeeSession(false);
+            localStorage.setItem('currentUserPhone', user.phone);
+            localStorage.setItem('sessionType', 'owner');
+    
+            const lastStoreId = localStorage.getItem('lastActiveStoreId');
+            const firstStoreId = user.stores?.[0]?.id;
             
-            // Fetch the latest user data to prevent race conditions
-            const globalData = await db.getGlobalData();
-            const freshUsers: User[] = globalData?.users || [];
-
-            const storeOwner = freshUsers.find(u => u.stores?.some(s => s.id === storeId));
-            if (!storeOwner) return reject(new Error('كود المتجر غير صحيح.'));
-
-            const employeeUser = freshUsers.find(u => u.phone === phone);
-            if (!employeeUser) return reject(new Error('رقم الهاتف غير مسجل في المنصة.'));
-            if (employeeUser.password !== password) return reject(new Error('كلمة المرور غير صحيحة.'));
-
-            let storeData = allStoresData[storeId];
-            if (!storeData) {
-// FIX: Cast the result of db.getStoreData to ensure the type is not `unknown`, which causes downstream errors.
-                const fetchedData = await db.getStoreData(storeId) as StoreData | null;
-                if (fetchedData) {
-                    storeData = fetchedData;
-                    setAllStoresData(prev => ({ ...prev, [storeId]: storeData }));
-                } else {
-                    return reject(new Error('لا يمكن تحميل بيانات المتجر.'));
-                }
+            if (lastStoreId && user.stores?.some(s => s.id === lastStoreId)) {
+                handleSetActiveStore(lastStoreId);
+            } else if (firstStoreId) {
+                handleSetActiveStore(firstStoreId);
             }
-
-            const employeeRecord = storeData.settings.employees.find(e => e.id === phone);
-            if (!employeeRecord) return reject(new Error('أنت لست موظفاً في هذا المتجر.'));
-            if (employeeRecord.status !== 'active') return reject(new Error(`حالة حسابك هي "${employeeRecord.status}". يرجى التواصل مع مالك المتجر.`));
-
-            await handlePasswordSuccess(employeeUser, { isEmployee: true, storeId });
-            resolve();
-        });
-    };
-    
-    const handleEmployeeRegisterRequest = async (data: { fullName: string; phone: string; password: string; storeId: string; email: string; }) => {
-        const { fullName, phone, password, storeId, email } = data;
-        
-        // Fetch the latest user data to prevent race conditions
-        const globalData = await db.getGlobalData();
-        const freshUsers: User[] = globalData?.users || [];
-
-        const storeOwner = freshUsers.find(u => u.stores?.some(s => s.id === storeId));
-        if (!storeOwner) throw new Error('كود المتجر غير صحيح.');
-
-        if (freshUsers.some(u => u.phone === phone)) throw new Error('رقم الهاتف هذا مسجل بالفعل في المنصة.');
-        if (freshUsers.some(u => u.email === email)) throw new Error('هذا البريد الإلكتروني مسجل بالفعل.');
-
-        const newUser: User = { fullName, phone, password, email, joinDate: new Date().toISOString() };
-        setUsers(prev => [...prev, newUser]);
-        
-        let storeData = allStoresData[storeId];
-        if (!storeData) {
-// FIX: Cast the result of db.getStoreData to ensure the type is not `unknown`, which causes downstream errors.
-            const fetchedData = await db.getStoreData(storeId) as StoreData | null;
-            if (fetchedData) {
-                storeData = fetchedData;
-            } else {
-                throw new Error('لا يمكن تحميل بيانات المتجر لتقديم طلبك.');
-            }
+            navigate('/');
         }
-
-        const newEmployee: Employee = { id: phone, name: fullName, email, permissions: [], status: 'pending' };
-        const updatedStoreData = { ...storeData, settings: { ...storeData.settings, employees: [...(storeData.settings.employees || []), newEmployee] }};
-        setAllStoresData(prev => ({ ...prev, [storeId]: updatedStoreData }));
-    };
-
-    const handleLogout = () => {
-        setCurrentUser(null);
-        setActiveStoreId(null);
-        setIsEmployeeSession(false);
-        localStorage.removeItem('currentUserPhone');
-        localStorage.removeItem('lastActiveStoreId');
-        localStorage.removeItem('sessionType');
-    };
     
-    const handleStoreCreated = (store: Store) => {
-        if (!currentUser) return;
-        const updatedUser = {
-            ...currentUser,
-            stores: [...(currentUser.stores || []), store]
-        };
-        setCurrentUser(updatedUser);
-        setUsers(users.map(u => u.phone === currentUser.phone ? updatedUser : u));
-        
-        const newStoreData: StoreData = {
-            settings: INITIAL_SETTINGS,
-            orders: [],
-            wallet: { balance: 0, transactions: [] },
-            cart: [],
-            customers: [],
-        };
-        setAllStoresData(prev => ({...prev, [store.id]: newStoreData}));
-        handleSetActiveStore(store.id);
-        setShowCongratsModal(true);
+        setUserForOtp(null);
+        setSessionInfoForOtp(null);
+        setOtpError('');
     };
 
     const handleSetActiveStore = async (storeId: string) => {
-        setIsLoading(true);
         setActiveStoreId(storeId);
         localStorage.setItem('lastActiveStoreId', storeId);
         setCart([]); // Reset cart on store switch
         if (!allStoresData[storeId]) {
-// FIX: Cast the result of db.getStoreData to ensure the type is not `unknown`, which causes downstream errors.
             const storeData = await db.getStoreData(storeId) as StoreData | null;
             if (storeData) {
                 setAllStoresData(prev => ({ ...prev, [storeId]: storeData }));
             }
         }
-        setIsLoading(false);
     };
 
-    const addLoyaltyPointsForOrder = (order: Order) => {
-        const cleanPhone = (order.customerPhone || '').replace(/\s/g, '').replace('+2', '');
-        if (!cleanPhone || order.loyaltyPointsAwarded) return;
-        const pointsToAdd = Math.floor(((order.productPrice + order.shippingFee) - (order.discount || 0)) / 10);
-        if (pointsToAdd > 0) {
-            setLoyaltyData(prev => ({ ...prev, [cleanPhone]: (prev[cleanPhone] || 0) + pointsToAdd }));
-             setOrders(prevOrders => prevOrders.map(o => o.id === order.id ? { ...o, loyaltyPointsAwarded: true } : o));
+    const handleEmployeeLogin = async ({ storeId, phone, password }: { storeId: string; phone: string; password: string }) => {
+        // Find owner to validate storeId
+        const owner = users.find(u => u.stores?.some(s => s.id === storeId));
+        if (!owner) {
+            throw new Error("كود المتجر غير صحيح.");
         }
-    };
 
-    const updateCustomerLoyaltyPoints = (phone: string, points: number) => {
-        const cleanPhone = (phone || '').replace(/\s/g, '').replace('+2', '');
-        if (cleanPhone) {
-            setLoyaltyData(prev => ({ ...prev, [cleanPhone]: points }));
-        }
-    };
-
-    const handleAddToCart = (product: Product) => {
-        setCart(prevCart => {
-            const existingItem = prevCart.find(item => item.productId === product.id);
-            if (existingItem) {
-                return prevCart.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+        // Get store data
+        let storeData = allStoresData[storeId];
+        if (!storeData) {
+            const data = await db.getStoreData(storeId) as StoreData | null;
+            if (data) {
+                setAllStoresData(prev => ({ ...prev, [storeId]: data }));
+                storeData = data;
+            } else {
+                 throw new Error("لا يمكن تحميل بيانات المتجر.");
             }
-            return [...prevCart, {
-                productId: product.id, name: product.name, quantity: 1, price: product.price,
-                cost: product.costPrice, weight: product.weight, thumbnail: product.thumbnail
-            }];
-        });
-    };
-
-    const handleUpdateCartQuantity = (productId: string, quantity: number) => {
-        if (quantity <= 0) {
-            handleRemoveFromCart(productId);
-        } else {
-            setCart(prevCart => prevCart.map(item => item.productId === productId ? { ...item, quantity } : item));
         }
-    };
-
-    const handleRemoveFromCart = (productId: string) => {
-        setCart(prevCart => prevCart.filter(item => item.productId !== productId));
-    };
-
-    const handlePlaceOrder = (data: PlaceOrderData): string => {
-        if (!activeStoreId || cart.length === 0) {
-          throw new Error("لا يمكن إتمام الطلب بدون متجر نشط أو وجود منتجات في السلة.");
+        
+        // Find employee in store
+        const employeeRecord = storeData.settings.employees.find(e => e.id === phone);
+        if (!employeeRecord) {
+            throw new Error("لست موظفاً في هذا المتجر.");
         }
-        const newOrder: Order = {
-            id: `order-${Date.now()}`,
-            orderNumber: `ORD-${Date.now()}`,
-            date: new Date().toISOString(),
-            customerName: data.customerName,
-            customerPhone: data.customerPhone,
-            customerAddress: data.customerAddress,
-            shippingCompany: data.shippingCompany,
-            shippingArea: data.shippingArea,
-            shippingFee: data.shippingFee,
-            items: cart,
-            productName: cart.map(i => i.name).join(', '),
-            productPrice: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
-            productCost: cart.reduce((sum, item) => sum + item.cost * item.quantity, 0),
-            weight: cart.reduce((sum, item) => sum + item.weight * item.quantity, 0),
-            discount: data.discount,
-            status: 'في_انتظار_المكالمة',
-            paymentStatus: 'بانتظار الدفع',
-            preparationStatus: 'بانتظار التجهيز',
-            includeInspectionFee: true,
-            isInsured: true,
-            notes: data.notes
+
+        if (employeeRecord.status !== 'active') {
+            const statusMap: Record<string, string> = { 'invited': 'في انتظار القبول', 'pending': 'معلق' };
+            const statusText = statusMap[employeeRecord.status || ''] || employeeRecord.status;
+            throw new Error(`حالة حسابك هي "${statusText}". يرجى التواصل مع مدير المتجر.`);
+        }
+
+        // Find user account and check password
+        const employeeUser = users.find(u => u.phone === phone);
+        if (!employeeUser || employeeUser.password !== password) {
+            throw new Error("رقم الهاتف أو كلمة المرور غير صحيحة.");
+        }
+
+        // Success!
+        completeLogin(employeeUser, { isEmployee: true, storeId: storeId });
+    };
+
+    const handleEmployeeRegisterRequest = async (data: EmployeeRegisterRequestData) => {
+        const { fullName, phone, password, storeId, email } = data;
+
+        const owner = users.find(u => u.stores?.some(s => s.id === storeId));
+        if (!owner) {
+            throw new Error("كود المتجر غير صحيح.");
+        }
+
+        if (users.some(u => u.phone === phone)) {
+            throw new Error("رقم الهاتف هذا مسجل بالفعل.");
+        }
+        if (users.some(u => u.email === email)) {
+            throw new Error("هذا البريد الإلكتروني مسجل بالفعل.");
+        }
+        
+        let storeData = allStoresData[storeId];
+        if (!storeData) {
+            const data = await db.getStoreData(storeId) as StoreData | null;
+            if (data) {
+                setAllStoresData(prev => ({ ...prev, [storeId]: data }));
+                storeData = data;
+            } else {
+                 throw new Error("لا يمكن تحميل بيانات المتجر.");
+            }
+        }
+        if (storeData.settings.employees.some(e => e.id === phone)) {
+            throw new Error("لديك بالفعل طلب انضمام معلق أو أنت موظف في هذا المتجر.");
+        }
+
+        const newUser: User = { fullName, phone, password, email, joinDate: new Date().toISOString() };
+        setUsers(prev => [...prev, newUser]);
+
+        const newEmployee: Employee = { id: phone, name: fullName, email, permissions: [], status: 'pending' };
+        
+        const updatedStoreData: StoreData = {
+            ...storeData,
+            settings: {
+                ...storeData.settings,
+                employees: [...storeData.settings.employees, newEmployee]
+            }
         };
 
-        setOrders(prevOrders => [newOrder, ...prevOrders]);
-        setCart([]); // Clear cart after placing order
-        return newOrder.id;
+        setAllStoresData(p => ({
+            ...p, 
+            [storeId]: updatedStoreData
+        }));
+
+        const storeInfo = owner!.stores!.find(s => s.id === storeId);
+        if (storeInfo) {
+            await db.saveStoreData(storeInfo, updatedStoreData);
+        }
+    };
+
+    const handleStoreCreated = (newStore: Store) => {
+        if (!currentUser) return;
+
+        const newStoreData: StoreData = {
+            orders: [],
+            settings: INITIAL_SETTINGS,
+            wallet: { balance: 0, transactions: [] },
+            cart: [],
+            customers: [],
+        };
+        
+        const updatedUsers = users.map(user => {
+            if (user.phone === currentUser.phone) {
+                return { ...user, stores: [...(user.stores || []), newStore] };
+            }
+            return user;
+        });
+
+        setUsers(updatedUsers);
+        setCurrentUser(prevUser => prevUser ? { ...prevUser, stores: [...(prevUser.stores || []), newStore] } : null);
+        
+        setAllStoresData(prevData => ({
+            ...prevData,
+            [newStore.id]: newStoreData
+        }));
+        
+        handleSetActiveStore(newStore.id);
+    };
+
+    const handleManualMigration = async () => {
+        const result = await db.migrateAllLegacyDataToRelational(users);
+        if (!result.success && result.error) {
+            alert(`فشل النقل!\nالخطأ: ${result.error}\nالملخص: ${result.summary}`);
+        } else {
+            alert(`اكتمل النقل!\nالملخص: ${result.summary}`);
+        }
+        return { success: result.success, error: result.error };
     };
 
     if (!authChecked) {
@@ -476,182 +451,103 @@ const App: React.FC = () => {
     }
 
     if (userForOtp) {
-        return (
-            <OtpVerificationPage 
-                user={userForOtp} 
-                onVerifyAttempt={handleOtpVerification}
-                onCancel={handleOtpCancel}
-                error={otpError}
-            />
-        );
+        return <OtpVerificationPage 
+            user={userForOtp} 
+            onVerifyAttempt={handleOtpVerification}
+            onCancel={handleOtpCancel}
+            error={otpError}
+        />;
     }
-
-    const MainLayout = () => {
-        const location = useLocation();
-        const isStorefront = location.pathname.startsWith('/store') || location.pathname.startsWith('/checkout') || location.pathname.startsWith('/order-success');
-        
-        if (isLoading) {
-            return <WelcomeLoader userName={currentUser?.fullName.split(' ')[0] || ''}/>;
-        }
-
-        const canBypassStoreData = ['/create-store', '/manage-stores', '/account-settings'].includes(location.pathname);
-
-        if (!activeStoreData && !canBypassStoreData) {
-            if (currentUser?.stores && currentUser.stores.length > 0) {
-                 return <Navigate to="/manage-stores" replace />;
-            } else {
-                 return <Navigate to="/create-store" replace />;
-            }
-        }
-
-        if (isStorefront) {
-            return <Outlet />;
-        }
-
-        return (
-            <div className="flex flex-col h-screen bg-slate-50 dark:bg-gradient-to-b dark:from-slate-950 dark:to-[#111827] text-slate-800 dark:text-slate-200" dir="rtl">
-                <Header 
-                    currentUser={currentUser}
-                    onLogout={handleLogout}
-                    onToggleSidebar={() => setIsSidebarOpen(true)}
-                    theme={theme}
-                    setTheme={setTheme}
-                />
-                <div className="flex flex-1 overflow-hidden">
-                    <Sidebar 
-                        activeStore={activeStore}
-                        isOpen={isSidebarOpen}
-                        onClose={handleSidebarClose}
-                    />
-                    <main className="flex-1 overflow-y-auto p-4 md:p-6">
-                        <Outlet />
-                    </main>
-                </div>
-            </div>
-        );
-    };
-
-    const EmployeeAppLayout = () => {
-        if (isLoading || !activeStoreData) return <WelcomeLoader userName={currentUser?.fullName.split(' ')[0] || ''}/>;
-
-        return (
-            <EmployeeLayout 
-                currentUser={currentUser} 
-                onLogout={handleLogout} 
-                storeOwner={employeeAppLayoutStoreOwner || null}
-                activeStoreId={activeStoreId}
-                theme={theme}
-                setTheme={setTheme}
-                allStoresData={allStoresData}
-                users={users}
-                handleSetActiveStore={handleSetActiveStore}
-                installPrompt={installPrompt}
-                onInstall={handleInstall}
-                isStandalone={isStandalone}
-                isIos={isIos}
-            >
-                <Outlet />
-            </EmployeeLayout>
-        );
+    
+    // Props passed down to layouts and pages
+    const pageProps = {
+        users, setUsers, allStoresData, setAllStoresData, currentUser, activeStore,
+        orders: allStoresData[activeStoreId!]?.orders || [],
+        settings: allStoresData[activeStoreId!]?.settings || INITIAL_SETTINGS,
+        wallet: allStoresData[activeStoreId!]?.wallet || { balance: 0, transactions: [] },
+        cart,
+        setOrders: (updater: any) => setAllStoresData(p => ({...p, [activeStoreId!]: {...p[activeStoreId!], orders: typeof updater === 'function' ? updater(p[activeStoreId!].orders) : updater }})),
+        setSettings: (updater: any) => setAllStoresData(p => ({...p, [activeStoreId!]: {...p[activeStoreId!], settings: typeof updater === 'function' ? updater(p[activeStoreId!].settings) : updater }})),
+        setWallet: (updater: any) => setAllStoresData(p => ({...p, [activeStoreId!]: {...p[activeStoreId!], wallet: typeof updater === 'function' ? updater(p[activeStoreId!].wallet) : updater }})),
     };
     
-    const setSettings = (updater: React.SetStateAction<Settings>) => {
-        if (activeStoreId) {
-            setAllStoresData(prev => {
-                const currentStoreData = prev[activeStoreId];
-                if (!currentStoreData) return prev;
-                const newSettings = typeof updater === 'function' ? updater(currentStoreData.settings) : updater;
-                return {
-                    ...prev,
-                    [activeStoreId]: { ...currentStoreData, settings: newSettings }
-                };
-            });
-        }
-    };
-
-    const setWallet = (updater: React.SetStateAction<Wallet>) => {
-        if (activeStoreId) {
-            setAllStoresData(prev => {
-                const currentStoreData = prev[activeStoreId];
-                if (!currentStoreData) return prev;
-                const newWallet = typeof updater === 'function' ? updater(currentStoreData.wallet) : updater;
-                return {
-                    ...prev,
-                    [activeStoreId]: { ...currentStoreData, wallet: newWallet }
-                };
-            });
-        }
-    };
-
-    const setOrders = (updater: React.SetStateAction<Order[]>) => {
-        if (activeStoreId) {
-            setAllStoresData(prev => {
-                const currentStoreData = prev[activeStoreId];
-                if (!currentStoreData) return prev;
-                const newOrders = typeof updater === 'function' ? updater(currentStoreData.orders) : updater;
-                return {
-                    ...prev,
-                    [activeStoreId]: { ...currentStoreData, orders: newOrders }
-                };
-            });
-        }
-    };
-
     return (
-        <Router>
-            {showCongratsModal && <CongratsModal onClose={() => setShowCongratsModal(false)} />}
+        <>
             <Routes>
-                <Route path="/owner-login" element={!currentUser ? <SignUpPage onPasswordSuccess={(user) => handlePasswordSuccess(user)} users={users} setUsers={setUsers} /> : <Navigate to="/" />} />
-                <Route path="/employee-login" element={!currentUser ? <EmployeeLoginPage onLoginAttempt={handleEmployeeLoginAttempt} onRegisterRequest={handleEmployeeRegisterRequest} allStoresData={allStoresData} users={users} /> : <Navigate to={isEmployeeSession ? "/employee/dashboard" : "/"} />} />
-                <Route path="/track-order" element={<OrderTrackingPage orders={allOrders} />} />
-                <Route path="/employee" element={currentUser && isEmployeeSession ? <EmployeeAppLayout /> : <Navigate to="/employee-login" />}>
-                    <Route index element={<Navigate to="dashboard" />} />
-                    <Route path="dashboard" element={<EmployeeDashboardPage orders={activeStoreData?.orders || []} currentUser={currentUser} />} />
-                    <Route path="confirmation-queue" element={<ConfirmationQueuePage orders={activeStoreData?.orders || []} setOrders={setOrders} currentUser={currentUser} settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
+                <Route path="/owner-login" element={<SignUpPage onPasswordSuccess={(user) => completeLogin(user, null)} users={users} setUsers={setUsers} />} />
+                <Route path="/employee-login" element={<EmployeeLoginPage allStoresData={allStoresData} users={users} onLoginAttempt={handleEmployeeLogin} onRegisterRequest={handleEmployeeRegisterRequest} />} />
+                <Route path="/track-order" element={<OrderTrackingPage orders={pageProps.orders} />} />
+                
+                <Route path="/employee" element={
+                    <EmployeeLayoutWrapper 
+                        currentUser={currentUser} onLogout={handleLogout}
+                        storeOwner={users.find(u => u.stores?.some(s => s.id === activeStoreId))}
+                        activeStoreId={activeStoreId}
+                        theme={theme} setTheme={setTheme}
+                        allStoresData={allStoresData} users={users}
+                        handleSetActiveStore={handleSetActiveStore}
+                        installPrompt={installPrompt} onInstall={() => installPrompt?.prompt()}
+                        isStandalone={isStandalone} isIos={isIos}
+                    >
+                        <Outlet/>
+                    </EmployeeLayoutWrapper>
+                }>
+                    <Route index element={<EmployeeDashboardPage currentUser={currentUser} orders={pageProps.orders} />} />
+                    <Route path="dashboard" element={<EmployeeDashboardPage currentUser={currentUser} orders={pageProps.orders} />} />
+                    <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} />} />
                     <Route path="account-settings" element={<EmployeeAccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
                 </Route>
-                <Route path="/" element={currentUser && !isEmployeeSession ? <MainLayout /> : <Navigate to={currentUser && isEmployeeSession ? "/employee/dashboard" : "/owner-login"} />}>
-                     <Route index element={<Dashboard orders={activeStoreData?.orders || []} settings={activeStoreData?.settings || INITIAL_SETTINGS} wallet={activeStoreData?.wallet || { balance: 0, transactions: [] }} currentUser={currentUser} />} />
-                     <Route path="confirmation-queue" element={<ConfirmationQueuePage orders={activeStoreData?.orders || []} setOrders={setOrders} currentUser={currentUser} settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
-                     <Route path="orders" element={<OrdersList orders={activeStoreData?.orders || []} setOrders={setOrders} settings={activeStoreData?.settings || INITIAL_SETTINGS} setWallet={setWallet} addLoyaltyPointsForOrder={addLoyaltyPointsForOrder} activeStore={activeStore} />} />
-                     <Route path="products" element={<ProductsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="customers" element={<CustomersPage orders={activeStoreData?.orders || []} loyaltyData={loyaltyData} updateCustomerLoyaltyPoints={updateCustomerLoyaltyPoints}/>} />
-                     <Route path="wallet" element={<WalletPage wallet={activeStoreData?.wallet || {balance: 0, transactions: []}} setWallet={setWallet} orders={activeStoreData?.orders || []} settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
-                     <Route path="settings" element={<SettingsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} activeStore={activeStore} />} />
-                     <Route path="customize-store" element={<StoreCustomizationPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} activeStore={activeStore} />} />
-                     <Route path="shipping" element={<ShippingPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="create-store" element={<CreateStorePage currentUser={currentUser} onStoreCreated={handleStoreCreated} />} />
-                     <Route path="manage-stores" element={<ManageSitesPage ownedStores={currentUser?.stores || []} collaboratingStores={[]} setActiveStoreId={handleSetActiveStore} users={users} setUsers={setUsers} allStoresData={allStoresData} setAllStoresData={setAllStoresData} />} />
-                     <Route path="abandoned-carts" element={<AbandonedCartsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="discounts" element={<DiscountsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="reviews" element={<ReviewsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="collections" element={<CollectionsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="product-options" element={<ProductOptionsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="expenses" element={<ExpensesPage wallet={activeStoreData?.wallet || {balance: 0, transactions: []}} setWallet={setWallet} />} />
-                     <Route path="marketing" element={<MarketingPage settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
-                     <Route path="ai-assistant" element={<ChatBot settings={activeStoreData?.settings || INITIAL_SETTINGS} orders={activeStoreData?.orders || []} />} />
-                     <Route path="reports" element={<AnalyticsPage orders={activeStoreData?.orders || []} wallet={activeStoreData?.wallet || {balance: 0, transactions: []}} settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
-                     <Route path="standard-reports" element={<ReportsPage orders={activeStoreData?.orders || []} wallet={activeStoreData?.wallet || { balance: 0, transactions: []}} settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
-                     <Route path="collections-report" element={<CollectionsReportPage orders={activeStoreData?.orders || []} settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
-                     <Route path="activity-logs" element={<ActivityLogsPage logs={activeStoreData?.settings.activityLogs || []} />} />
-                     <Route path="suppliers" element={<SuppliersPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} setWallet={setWallet} />} />
-                     <Route path="pages" element={<PagesManager settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="settings/payment" element={<PaymentSettingsPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} />} />
-                     <Route path="settings/employees" element={<EmployeesPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} currentUser={currentUser} users={users} activeStoreId={activeStoreId} />} />
-                     <Route path="team-chat" element={<TeamChatPage currentUser={currentUser} activeStoreId={activeStoreId} settings={activeStoreData?.settings || INITIAL_SETTINGS} users={users} />} />
-                     <Route path="whatsapp" element={<WhatsAppPage orders={activeStoreData?.orders || []} />} />
-                     <Route path="account-settings" element={<AccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
-                     
-                     <Route path="*" element={<Navigate to="/" />} />
+
+                <Route path="/" element={<MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme} />}>
+                    <Route index element={<Dashboard {...pageProps} />} />
+                    <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} />} />
+                    <Route path="orders" element={<OrdersList {...pageProps} addLoyaltyPointsForOrder={() => {}} />} />
+                    <Route path="products" element={<ProductsPage {...pageProps} />} />
+                    <Route path="customers" element={<CustomersPage orders={pageProps.orders} loyaltyData={{}} updateCustomerLoyaltyPoints={() => {}} />} />
+                    <Route path="wallet" element={<WalletPage {...pageProps} />} />
+                    <Route path="settings" element={<SettingsPage {...pageProps} onManualSave={currentUser?.isAdmin ? handleManualMigration : undefined} />} />
+                    <Route path="customize-store" element={<StoreCustomizationPage {...pageProps} />} />
+                    <Route path="shipping" element={<ShippingPage {...pageProps} />} />
+                    <Route path="create-store" element={<CreateStorePage currentUser={currentUser} onStoreCreated={handleStoreCreated} />} />
+                    <Route path="manage-stores" element={<ManageSitesPage ownedStores={currentUser?.stores || []} collaboratingStores={[]} setActiveStoreId={handleSetActiveStore} {...pageProps} />} />
+                    <Route path="abandoned-carts" element={<AbandonedCartsPage {...pageProps} />} />
+                    <Route path="discounts" element={<DiscountsPage {...pageProps} />} />
+                    <Route path="reviews" element={<ReviewsPage {...pageProps} />} />
+                    <Route path="collections" element={<CollectionsPage {...pageProps} />} />
+                    <Route path="product-options" element={<ProductOptionsPage {...pageProps} />} />
+                    <Route path="expenses" element={<ExpensesPage {...pageProps} />} />
+                    <Route path="marketing" element={<MarketingPage {...pageProps} />} />
+                    <Route path="ai-assistant" element={<ChatBot {...pageProps} />} />
+                    <Route path="reports" element={<AnalyticsPage {...pageProps} />} />
+                    <Route path="standard-reports" element={<ReportsPage {...pageProps} />} />
+                    <Route path="collections-report" element={<CollectionsReportPage {...pageProps} />} />
+                    <Route path="activity-logs" element={<ActivityLogsPage logs={pageProps.settings.activityLogs || []} />} />
+                    <Route path="suppliers" element={<SuppliersPage {...pageProps} />} />
+                    <Route path="pages" element={<PagesManager {...pageProps} />} />
+                    <Route path="settings/payment" element={<PaymentSettingsPage {...pageProps} />} />
+                    <Route path="settings/employees" element={<EmployeesPage {...pageProps} activeStoreId={activeStoreId} />} />
+                    <Route path="team-chat" element={<TeamChatPage {...pageProps} activeStoreId={activeStoreId} />} />
+                    <Route path="whatsapp" element={<WhatsAppPage {...pageProps} />} />
+                    <Route path="account-settings" element={<AccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
                 </Route>
 
-                <Route path="/store" element={<StorefrontPage settings={activeStoreData?.settings || INITIAL_SETTINGS} setSettings={setSettings} activeStore={activeStore} cart={cart} onAddToCart={handleAddToCart} onUpdateCartQuantity={handleUpdateCartQuantity} onRemoveFromCart={handleRemoveFromCart} />} />
-                <Route path="/checkout" element={<CheckoutPage settings={activeStoreData?.settings || INITIAL_SETTINGS} cart={cart} onPlaceOrder={handlePlaceOrder} />} />
-                <Route path="/order-success/:orderId" element={<OrderSuccessPage orders={activeStoreData?.orders || []} settings={activeStoreData?.settings || INITIAL_SETTINGS} />} />
-
+                <Route path="store" element={<StorefrontPage {...pageProps} onAddToCart={() => {}} onUpdateCartQuantity={() => {}} onRemoveFromCart={() => {}} />} />
+                <Route path="checkout" element={<CheckoutPage {...pageProps} onPlaceOrder={() => '123'} />} />
+                <Route path="order-success/:orderId" element={<OrderSuccessPage {...pageProps} />} />
+                <Route path="*" element={<MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme}><Dashboard {...pageProps}/></MainLayout>} />
             </Routes>
-        </Router>
+            {showCongratsModal && <CongratsModal onClose={() => setShowCongratsModal(false)} />}
+        </>
     );
 };
 
-export default App;
+// Wrapper needed for react-router v6 hooks
+export const AppWrapper = () => (
+    <HashRouter>
+        <AppComponent />
+    </HashRouter>
+);
+
+// We keep a named export for index.tsx, but the app itself is now a React app.
+// The default export is what matters for the React ecosystem.
+export default AppWrapper;

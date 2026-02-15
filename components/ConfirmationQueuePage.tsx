@@ -1,12 +1,7 @@
 
-
-
-
-
 import React, { useState, useMemo, useEffect } from 'react';
-// FIX: Import 'OrderStatus' type to resolve 'Cannot find name' error.
+import { motion } from 'framer-motion';
 import { Order, User, ConfirmationLog, OrderStatus, Settings } from '../types';
-// FIX: Added Truck to the import to resolve the error.
 import { PhoneForwarded, Check, X, User as UserIcon, MapPin, Package, CalendarDays, Phone, MessageSquare, Edit3, Save, Plus, Clock, ChevronsUpDown, ArrowRight, Truck, Tag } from 'lucide-react';
 
 const CONFIRMATION_ACTIONS = [
@@ -25,10 +20,9 @@ interface ConfirmationQueuePageProps {
   settings: Settings;
 }
 
-// FIX: Moved helper components before the main component to ensure they are defined before use, resolving potential scoping issues.
 interface DetailSectionProps {
     title: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
 }
 
 const DetailSection = ({ title, children }: DetailSectionProps) => (
@@ -54,6 +48,7 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
     const [editedAddress, setEditedAddress] = useState('');
     const [isEditingPhone2, setIsEditingPhone2] = useState(false);
     const [editedPhone2, setEditedPhone2] = useState('');
+    const [isLogModalOpen, setIsLogModalOpen] = useState(false);
 
     const pendingOrders = useMemo(() =>
         orders.filter(o => o.status === 'في_انتظار_المكالمة').sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
@@ -65,18 +60,14 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
         const isStillPending = freshActiveOrder && freshActiveOrder.status === 'في_انتظار_المكالمة';
 
         if (isStillPending) {
-            // If the active order is still pending, sync its data in case of updates (like new logs).
             if (JSON.stringify(freshActiveOrder) !== JSON.stringify(activeOrder)) {
                 setActiveOrder(freshActiveOrder);
             }
         } else {
-            // If the active order is no longer pending (or doesn't exist),
-            // or if there's no active order set, select the first available pending order.
             const currentFirstPending = pendingOrders[0] || null;
             if (!activeOrder || activeOrder.id !== currentFirstPending?.id) {
                 setActiveOrder(currentFirstPending);
             } else if (activeOrder && !currentFirstPending) {
-                // This handles the case where the last pending order was just processed
                 setActiveOrder(null);
             }
         }
@@ -115,7 +106,7 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
     const handleActionSubmit = () => {
         if (!activeOrder || !currentUser) return;
 
-        const activeOrderId = activeOrder.id; // Capture ID for use in closure
+        const activeOrderId = activeOrder.id;
 
         const newLog: ConfirmationLog = {
             userId: currentUser.phone,
@@ -132,7 +123,6 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
             newStatus = 'ملغي';
         }
 
-        // Use functional update to ensure we're modifying the latest state
         setOrders(currentOrders =>
             currentOrders.map(order => {
                 if (order.id === activeOrderId) {
@@ -146,7 +136,6 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
             })
         );
         
-        // Clear form fields
         setActionNotes('');
         setSelectedAction(CONFIRMATION_ACTIONS[0]);
     };
@@ -190,7 +179,6 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
             </div>
 
             <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex overflow-hidden min-h-[600px]">
-                {/* Orders List Panel */}
                 <div className={`w-full md:w-1/3 border-l border-slate-200 dark:border-slate-800 flex flex-col h-full transition-all duration-300 ${activeOrder && 'hidden md:flex'}`}>
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800">
                         <h2 className="font-bold text-slate-800 dark:text-white">طلبات جديدة ({pendingOrders.length})</h2>
@@ -217,7 +205,6 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                     )}
                 </div>
 
-                {/* Details Panel */}
                 <div className={`w-full md:w-2/3 flex flex-col h-full transition-all duration-300 ${!activeOrder && 'hidden md:flex'}`}>
                     {activeOrder ? (
                         <>
@@ -228,8 +215,7 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                                 </div>
                             </div>
                             
-                            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-                                {/* Customer & Order Details */}
+                            <div className="flex-1 p-6 space-y-6 overflow-y-auto md:pb-6 pb-28">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <DetailSection title="بيانات العميل">
                                         <DetailItem icon={<UserIcon size={14}/>} label="الاسم" value={activeOrder.customerName} />
@@ -286,8 +272,7 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                                     </div>
                                 </DetailSection>
 
-                                {/* Quick Actions */}
-                                <div className="flex gap-3">
+                                <div className="flex gap-3 md:hidden">
                                     <a href={`tel:${activeOrder.customerPhone}`} className="flex-1 flex items-center justify-center gap-2 bg-blue-500 text-white p-3 rounded-lg font-bold hover:bg-blue-600"><Phone size={16}/> اتصال</a>
                                     <a href={getWhatsAppLink(activeOrder.customerPhone, activeOrder.customerName)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 text-white p-3 rounded-lg font-bold hover:bg-emerald-600"><MessageSquare size={16}/> واتساب</a>
                                 </div>
@@ -309,8 +294,7 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                                 </DetailSection>
                             </div>
 
-                            {/* Action Form */}
-                            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex-shrink-0 space-y-3">
+                            <div className="hidden md:block p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex-shrink-0 space-y-3">
                                 <div className="relative">
                                     <select value={selectedAction} onChange={e => setSelectedAction(e.target.value)} className="w-full p-3 pr-4 pl-8 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold outline-none focus:ring-2 focus:ring-indigo-500">
                                         {CONFIRMATION_ACTIONS.map(action => <option key={action} value={action}>{action}</option>)}
@@ -319,6 +303,18 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                                 </div>
                                 <textarea placeholder="إضافة ملاحظات (اختياري)..." rows={2} value={actionNotes} onChange={e => setActionNotes(e.target.value)} className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
                                 <button onClick={handleActionSubmit} className="w-full p-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700">حفظ الإجراء</button>
+                            </div>
+
+                            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 p-2 flex items-center gap-2 shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+                                <a href={`tel:${activeOrder.customerPhone}`} className="flex-1 flex items-center justify-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 p-3 rounded-lg font-bold hover:bg-blue-200">
+                                    <Phone size={16}/> اتصال
+                                </a>
+                                <a href={getWhatsAppLink(activeOrder.customerPhone, activeOrder.customerName)} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 p-3 rounded-lg font-bold hover:bg-emerald-200">
+                                    <MessageSquare size={16}/> واتساب
+                                </a>
+                                <button onClick={() => setIsLogModalOpen(true)} className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white p-3 rounded-lg font-bold hover:bg-indigo-700">
+                                    <Save size={16}/> تسجيل إجراء
+                                </button>
                             </div>
                         </>
                     ) : (
@@ -332,6 +328,32 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                     )}
                 </div>
             </div>
+
+            {isLogModalOpen && activeOrder && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setIsLogModalOpen(false)}>
+                    <motion.div 
+                        initial={{ y: "100%" }}
+                        animate={{ y: "0%" }}
+                        exit={{ y: "100%" }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                        className="w-full bg-white dark:bg-slate-900 rounded-t-2xl p-5 shadow-lg border-t border-slate-200 dark:border-slate-800" 
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="w-10 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-4"></div>
+                        <h3 className="font-bold text-lg mb-4 text-center text-slate-800 dark:text-white">تسجيل إجراء للمكالمة</h3>
+                        <div className="space-y-3">
+                            <div className="relative">
+                                <select value={selectedAction} onChange={e => setSelectedAction(e.target.value)} className="w-full p-3 pr-4 pl-8 appearance-none bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+                                    {CONFIRMATION_ACTIONS.map(action => <option key={action} value={action}>{action}</option>)}
+                                </select>
+                                <ChevronsUpDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                            </div>
+                            <textarea placeholder="إضافة ملاحظات (اختياري)..." rows={3} value={actionNotes} onChange={e => setActionNotes(e.target.value)} className="w-full p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                            <button onClick={() => { handleActionSubmit(); setIsLogModalOpen(false); }} className="w-full p-4 bg-indigo-600 text-white rounded-lg font-black hover:bg-indigo-700">حفظ الإجراء</button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
         </div>
     );
 };

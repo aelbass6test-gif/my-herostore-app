@@ -1,8 +1,4 @@
 
-
-
-
-
 // FIX: Import 'useMemo' from 'react' to resolve 'Cannot find name' error.
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';

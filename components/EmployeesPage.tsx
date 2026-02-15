@@ -22,6 +22,36 @@ const itemVariants = {
   }
 };
 
+const PERMISSION_GROUPS: { title: string; permissions: { key: Permission, label: string }[] }[] = [
+  { title: 'الأوردرات والتحكم', permissions: [ { key: 'ORDERS_VIEW', label: 'عرض الأوردرات فقط' }, { key: 'ORDERS_MANAGE', label: 'إدارة كاملة للأوردرات (إضافة، تعديل، حذف)' } ] },
+  { title: 'المنتجات والمخزون', permissions: [ { key: 'PRODUCTS_VIEW', label: 'عرض المنتجات فقط' }, { key: 'PRODUCTS_MANAGE', label: 'إدارة كاملة للمنتجات' } ] },
+  { title: 'البيانات المالية', permissions: [ { key: 'DASHBOARD_VIEW', label: 'عرض لوحة التحكم والإحصائيات' }, { key: 'WALLET_VIEW', label: 'عرض المحفظة والعمليات' }, { key: 'WALLET_MANAGE', label: 'إجراء عمليات يدوية بالمحفظة' } ] },
+  { title: 'إعدادات المتجر', permissions: [ { key: 'SETTINGS_VIEW', label: 'عرض الإعدادات فقط' }, { key: 'SETTINGS_MANAGE', label: 'تعديل كافة إعدادات المتجر' } ] },
+];
+
+const ROLES: Record<string, { name: string; permissions: Permission[] }> = {
+  CONFIRMATION: { name: 'مسؤول تأكيد', permissions: ['ORDERS_VIEW', 'PRODUCTS_VIEW'] },
+  ORDER_MANAGER: { name: 'مدير طلبات', permissions: ['ORDERS_VIEW', 'ORDERS_MANAGE', 'PRODUCTS_VIEW'] },
+  ACCOUNTANT: { name: 'محاسب', permissions: ['DASHBOARD_VIEW', 'WALLET_VIEW', 'WALLET_MANAGE'] },
+  FULL_MANAGER: { name: 'مدير كامل', permissions: ['DASHBOARD_VIEW', 'ORDERS_VIEW', 'ORDERS_MANAGE', 'PRODUCTS_VIEW', 'PRODUCTS_MANAGE', 'WALLET_VIEW', 'WALLET_MANAGE', 'SETTINGS_VIEW'] },
+};
+
+const getRoleName = (permissions: Permission[]): string => {
+    const totalPermissions = Object.keys(PERMISSIONS).length;
+    if (permissions.length === totalPermissions) return 'صلاحيات كاملة';
+
+    const currentPermissions = new Set(permissions);
+    for (const roleKey in ROLES) {
+        const rolePermissions = new Set(ROLES[roleKey].permissions);
+        if (currentPermissions.size === rolePermissions.size && [...currentPermissions].every(p => rolePermissions.has(p))) {
+            return ROLES[roleKey].name;
+        }
+    }
+    
+    if (permissions.length === 0) return 'بدون صلاحيات';
+    return `${permissions.length} صلاحيات مخصصة`;
+};
+
 
 interface EmployeesPageProps {
   settings: Settings;
@@ -30,13 +60,6 @@ interface EmployeesPageProps {
   users: User[];
   activeStoreId: string | null;
 }
-
-const PERMISSION_GROUPS: { title: string; permissions: { key: Permission, label: string }[] }[] = [
-  { title: 'الأوردرات والتحكم', permissions: [ { key: 'ORDERS_VIEW', label: 'عرض الأوردرات فقط' }, { key: 'ORDERS_MANAGE', label: 'إدارة كاملة للأوردرات (إضافة، تعديل، حذف)' } ] },
-  { title: 'المنتجات والمخزون', permissions: [ { key: 'PRODUCTS_VIEW', label: 'عرض المنتجات فقط' }, { key: 'PRODUCTS_MANAGE', label: 'إدارة كاملة للمنتجات' } ] },
-  { title: 'البيانات المالية', permissions: [ { key: 'DASHBOARD_VIEW', label: 'عرض لوحة التحكم والإحصائيات' }, { key: 'WALLET_VIEW', label: 'عرض المحفظة والعمليات' }, { key: 'WALLET_MANAGE', label: 'إجراء عمليات يدوية بالمحفظة' } ] },
-  { title: 'إعدادات المتجر', permissions: [ { key: 'SETTINGS_VIEW', label: 'عرض الإعدادات فقط' }, { key: 'SETTINGS_MANAGE', label: 'تعديل كافة إعدادات المتجر' } ] },
-];
 
 const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, currentUser, users, activeStoreId }) => {
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
@@ -222,8 +245,7 @@ const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEd
                     <td className="px-6 py-4">
                         {isOwner ? <span className="text-xs font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/50 px-2 py-1 rounded-full">المالك (صلاحيات كاملة)</span>
                         : isInvited ? <span className="flex items-center gap-2 text-xs font-bold text-sky-700 bg-sky-100 dark:text-sky-300 dark:bg-sky-900/50 px-2 py-1 rounded-full w-fit"><Clock size={14}/> في انتظار القبول</span>
-                        : emp.permissions.length === Object.keys(PERMISSIONS).length ? <span className="text-xs font-bold text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/50 px-2 py-1 rounded-full">صلاحيات كاملة</span>
-                        : <span className="text-xs font-bold text-slate-500">{emp.permissions.length} صلاحيات مخصصة</span>
+                        : <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">{getRoleName(emp.permissions)}</span>
                         }
                     </td>
                     <td className="px-6 py-4">
@@ -259,11 +281,25 @@ const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEd
 interface EmployeeModalProps { isOpen: boolean; onClose: () => void; onSave: (employee: Omit<Employee, 'id'> & { id?: string }) => void; employee: Employee | null; }
 const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, employee }) => {
   const [formData, setFormData] = useState({ name: '', email: '', permissions: [] as Permission[] });
+  const [activeRole, setActiveRole] = useState('custom');
   
   useEffect(() => {
     if (employee) { setFormData({ name: employee.name, email: employee.email, permissions: employee.permissions }); } 
     else { setFormData({ name: '', email: '', permissions: [] }); }
   }, [employee, isOpen]);
+
+  useEffect(() => {
+    const currentPermissions = new Set(formData.permissions);
+    let foundRole = 'custom';
+    for (const roleKey in ROLES) {
+      const rolePermissions = new Set(ROLES[roleKey].permissions);
+      if (currentPermissions.size === rolePermissions.size && [...currentPermissions].every(p => rolePermissions.has(p))) {
+        foundRole = roleKey;
+        break;
+      }
+    }
+    setActiveRole(foundRole);
+  }, [formData.permissions]);
 
   const handlePermissionChange = (permission: Permission, checked: boolean) => {
     setFormData(prev => ({ ...prev, permissions: checked ? [...prev.permissions, permission] : prev.permissions.filter(p => p !== permission) }));
@@ -271,6 +307,12 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
   
   const handleSelectAll = (checked: boolean) => {
     setFormData(prev => ({ ...prev, permissions: checked ? Object.keys(PERMISSIONS) as Permission[] : [] }));
+  };
+
+  const handleRoleSelect = (roleKey: string) => {
+    if (ROLES[roleKey]) {
+      setFormData(prev => ({ ...prev, permissions: [...ROLES[roleKey].permissions] }));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -291,16 +333,29 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
           </h3>
           <button onClick={onClose}><XCircle className="text-slate-400 hover:text-red-500"/></button>
         </div>
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-8">
+        <form onSubmit={handleSubmit} id="permission-form" className="flex-1 overflow-y-auto p-8 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="text-sm font-bold text-slate-700 dark:text-slate-400">اسم الموظف</label>
-              <input type="text" readOnly value={formData.name} className="mt-2 w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none" />
-            </div>
-            <div>
-              <label className="text-sm font-bold text-slate-700 dark:text-slate-400">البريد الإلكتروني</label>
-              <input type="email" readOnly value={formData.email} className="mt-2 w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none" />
-            </div>
+            <div><label className="text-sm font-bold text-slate-700 dark:text-slate-400">اسم الموظف</label><input type="text" readOnly value={formData.name} className="mt-2 w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none" /></div>
+            <div><label className="text-sm font-bold text-slate-700 dark:text-slate-400">البريد الإلكتروني</label><input type="email" readOnly value={formData.email} className="mt-2 w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none" /></div>
+          </div>
+          <div>
+              <h4 className="text-lg font-bold dark:text-white mb-4 flex items-center gap-2"><UserCog size={20}/> اختر دوراً سريعاً</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(ROLES).map(([key, role]) => (
+                      <button
+                          key={key}
+                          type="button"
+                          onClick={() => handleRoleSelect(key)}
+                          className={`p-4 rounded-xl border-2 text-center font-bold transition-all ${
+                          activeRole === key
+                              ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-500 text-purple-700 dark:text-purple-300'
+                              : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-purple-400'
+                          }`}
+                      >
+                          {role.name}
+                      </button>
+                  ))}
+              </div>
           </div>
           <div>
             <div className="flex justify-between items-center pb-4 border-b dark:border-slate-800 mb-4">

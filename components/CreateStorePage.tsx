@@ -48,7 +48,7 @@ const CreateStorePage: React.FC<CreateStorePageProps> = ({ currentUser, onStoreC
     const uniqueUrl = `${slug}-${Math.random().toString(36).substring(2, 8)}.wuitstore.com`;
 
     const newStore: Store = {
-      id: `store-${Date.now()}`,
+      id: `store-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       name: storeName,
       specialization,
       language,
