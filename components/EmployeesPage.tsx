@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, Employee, Permission, PERMISSIONS, User, Store } from '../types';
 import { Users, UserPlus, UserCog, Trash2, XCircle, KeyRound, AlertCircle, Check, Clock, Copy, RefreshCw } from 'lucide-react';
@@ -39,6 +36,7 @@ const ROLES: Record<string, { name: string; permissions: Permission[] }> = {
 };
 
 const getRoleName = (permissions: Permission[]): string => {
+    if (!permissions) return 'بدون صلاحيات';
     const totalPermissions = Object.keys(PERMISSIONS).length;
     if (permissions.length === totalPermissions) return 'صلاحيات كاملة';
 
@@ -293,7 +291,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
   const [activeRole, setActiveRole] = useState('custom');
   
   useEffect(() => {
-    if (employee) { setFormData({ name: employee.name, email: employee.email, permissions: employee.permissions }); } 
+    if (employee) { setFormData({ name: employee.name, email: employee.email, permissions: employee.permissions || [] }); } 
     else { setFormData({ name: '', email: '', permissions: [] }); }
   }, [employee, isOpen]);
 
@@ -311,7 +309,7 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
   }, [formData.permissions]);
 
   const handlePermissionChange = (permission: Permission, checked: boolean) => {
-    setFormData(prev => ({ ...prev, permissions: checked ? [...prev.permissions, permission] : prev.permissions.filter(p => p !== permission) }));
+    setFormData(prev => ({ ...prev, permissions: checked ? [...(prev.permissions || []), permission] : (prev.permissions || []).filter(p => p !== permission) }));
   };
   
   const handleSelectAll = (checked: boolean) => {

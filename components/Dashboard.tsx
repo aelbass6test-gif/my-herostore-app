@@ -63,8 +63,8 @@ const StatusDistribution = ({ data }: { data: { name: string, value: number, col
 };
 
 const SmartSuggestions = ({ orders, settings }: { orders: Order[], settings: Settings }) => {
-    const [suggestions, setSuggestions] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
+    const [suggestions, setSuggestions] = useState('اضغط على زر التحديث للحصول على اقتراحات ذكية.');
+    const [isLoading, setIsLoading] = useState(false);
 
     const customers = useMemo(() => {
         const customerMap = new Map<string, Pick<CustomerProfile, 'name' | 'successfulOrders' | 'totalSpent'>>();
@@ -90,10 +90,6 @@ const SmartSuggestions = ({ orders, settings }: { orders: Order[], settings: Set
         setSuggestions(result);
         setIsLoading(false);
     };
-
-    useEffect(() => {
-        fetchSuggestions();
-    }, []);
 
     return (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">

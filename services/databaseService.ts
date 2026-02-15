@@ -240,7 +240,7 @@ export const getStoreData = async (storeId: string): Promise<StoreData | null> =
             id: e.phone,
             name: e.users?.full_name || 'مستخدم غير معروف',
             email: e.users?.email || 'بريد غير معروف',
-            permissions: e.permissions,
+            permissions: e.permissions || [],
             status: e.status
         }));
 
@@ -437,36 +437,67 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
     }
 };
 
-// FIX: Implement getGlobalData to resolve export error.
 export const getGlobalData = async (): Promise<{ users: User[], loyaltyData: any } | null> => {
     try {
         const { data, error } = await supabase
-            .from('documents')
-            .select('content')
-            .eq('id', 'global')
-            .single();
+            .from('users')
+            .select('*');
 
-        if (error || !data) {
-            console.log('Global doc not found, trying local storage.');
+        if (error) {
+            console.error("Error fetching users from Supabase:", error);
+            throw error;
+        }
+
+        if (!data) {
+            console.log('No users found, trying local storage.');
             return getLocal('global');
         }
 
-        return data.content;
+        const users: User[] = data.map((u: any) => ({
+            fullName: u.full_name,
+            phone: u.phone,
+            password: u.password,
+            email: u.email,
+            stores: u.stores || [],
+            sites: u.sites || [],
+            isAdmin: u.is_admin,
+            isBanned: u.is_banned,
+            joinDate: u.join_date,
+        }));
+        
+        const globalData = { users, loyaltyData: {} };
+        saveLocal('global', globalData);
+        return globalData;
+
     } catch (err) {
         console.error("Error fetching global data:", err);
         return getLocal('global');
     }
 };
 
-// FIX: Implement saveGlobalData to resolve export error.
 export const saveGlobalData = async (data: { users: User[], loyaltyData: any }): Promise<{ success: boolean, error?: string }> => {
     saveLocal('global', data);
     try {
+        const usersToUpsert = data.users.map(u => ({
+            phone: u.phone,
+            full_name: u.fullName,
+            password: u.password,
+            email: u.email,
+            stores: u.stores || [],
+            sites: u.sites || [],
+            is_admin: u.isAdmin || false,
+            is_banned: u.isBanned || false,
+            join_date: u.joinDate
+        }));
+
         const { error } = await supabase
-            .from('documents')
-            .upsert({ id: 'global', content: data }, { onConflict: 'id' });
+            .from('users')
+            .upsert(usersToUpsert, { onConflict: 'phone' });
         
-        if (error) throw error;
+        if (error) {
+            console.error("Error upserting users to Supabase:", error);
+            throw error;
+        }
         return { success: true };
     } catch (err: any) {
         console.error("Error saving global data:", err);
