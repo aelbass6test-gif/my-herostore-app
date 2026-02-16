@@ -18,11 +18,12 @@ const GlobalSaveIndicator: React.FC<GlobalSaveIndicatorProps> = ({ status, messa
   };
 
   const current = config[status];
+  const shouldShow = status === 'saving' || status === 'success' || status === 'error';
 
   return (
     <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[200]">
       <AnimatePresence>
-        {status !== 'idle' && (
+        {shouldShow && current && (
           <motion.div
             key={status}
             initial={{ opacity: 0, y: 20 }}

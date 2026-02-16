@@ -25,7 +25,7 @@ const UserPermissionsModal: React.FC<{
     setAllStoresData: React.Dispatch<React.SetStateAction<Record<string, StoreData>>>;
     // FIX: Add 'users' to the props interface to match the props passed to the component.
     users: User[];
-}> = ({ user, onClose, allStoresData, setAllStoresData }) => {
+}> = ({ user, onClose, allStoresData, setAllStoresData, users }) => {
 
     const [editingEmployee, setEditingEmployee] = useState<{ store: Store, employee: Employee } | null>(null);
 

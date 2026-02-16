@@ -1,4 +1,8 @@
 
+
+
+
+
 import { useState, useMemo, useEffect, useRef } from 'react';
 // FIX: The `Navigate` component was not imported, causing an error. It has been added to the import statement.
 import { HashRouter, Routes, Route, Outlet, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
@@ -42,6 +46,7 @@ import AdminPage from './components/AdminPage';
 import EmployeeLayout from './components/EmployeeLayout';
 import EmployeeDashboardPage from './components/EmployeeDashboardPage';
 import EmployeeAccountSettingsPage from './components/EmployeeAccountSettingsPage';
+import EmployeeActivityPage from './components/EmployeeActivityPage';
 import AccountSettingsPage from './components/AccountSettingsPage';
 import CollectionsReportPage from './components/CollectionsReportPage';
 import ActivityLogsPage from './components/ActivityLogsPage';
@@ -170,6 +175,8 @@ export const AppComponent = () => {
     const [saveMessage, setSaveMessage] = useState('');
     // FIX: Replaced `NodeJS.Timeout` with `ReturnType<typeof setTimeout>` for browser compatibility. `NodeJS.Timeout` is a Node.js specific type and is not available in the browser environment.
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const refreshDebounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | null>>({});
+    const isRefreshing = useRef(false);
     
     // 2FA State
     const [userForOtp, setUserForOtp] = useState<User | null>(null);
@@ -191,6 +198,12 @@ export const AppComponent = () => {
     // --- Auto-Save Logic ---
     useEffect(() => {
         if (isInitialLoad) return;
+        
+        if (isRefreshing.current) {
+            console.log('[AUTO-SAVE] Skipped save because a refresh just occurred.');
+            isRefreshing.current = false; // Reset flag and skip this cycle
+            return;
+        }
 
         // A change occurred. Indicate that there are unsaved changes.
         // Don't change status if it's already saving or pending.
@@ -320,21 +333,7 @@ export const AppComponent = () => {
         mediaQuery.addEventListener('change', handleDisplayModeChange);
         setIsIos(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
 
-        loadData().then(() => {
-            const savedUserPhone = localStorage.getItem('currentUserPhone');
-            if (savedUserPhone) {
-                const savedSessionType = localStorage.getItem('sessionType');
-                if (savedSessionType === 'employee') {
-                    navigate('/employee/dashboard');
-                } else if (savedSessionType === 'admin') {
-                    navigate('/admin');
-                } else {
-                    navigate('/');
-                }
-            } else {
-                navigate('/owner-login');
-            }
-        });
+        loadData();
 
         return () => {
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -579,29 +578,49 @@ export const AppComponent = () => {
         completeLogin(userToImpersonate, null); 
     };
 
-    const refreshStoreData = async (storeId: string) => {
-        if (!storeId) return;
-        console.log(`[REALTIME] Refreshing data for store: ${storeId}`);
-        const storeData = await db.getStoreData(storeId) as StoreData | null;
-        if (storeData) {
-            const sanitizedStoreData = sanitizeData(storeData);
-            setAllStoresData(prev => ({ ...prev, [storeId]: sanitizedStoreData }));
-            console.log(`[REALTIME] Store ${storeId} data updated.`);
+    const refreshStoreData = (storeId: string) => {
+        if (!storeId || storeId !== activeStoreId) {
+            if (storeId !== activeStoreId) console.log(`[REALTIME] Ignoring refresh for non-active store: ${storeId}`);
+            return;
         }
+
+        if (refreshDebounceTimers.current[storeId]) {
+            clearTimeout(refreshDebounceTimers.current[storeId]!);
+        }
+
+        refreshDebounceTimers.current[storeId] = setTimeout(async () => {
+            console.log(`[REALTIME] Debounced refresh executing for store: ${storeId}`);
+            const storeData = await db.getStoreData(storeId) as StoreData | null;
+            if (storeData) {
+                const sanitizedStoreData = sanitizeData(storeData);
+                isRefreshing.current = true;
+                setAllStoresData(prev => ({ ...prev, [storeId]: sanitizedStoreData }));
+                console.log(`[REALTIME] Store ${storeId} data updated via debounce.`);
+            }
+            refreshDebounceTimers.current[storeId] = null;
+        }, 1500);
     };
 
-    const refreshGlobalData = async () => {
-        console.log('[REALTIME] Refreshing global user data.');
-        const globalData = await db.getGlobalData();
-        if (globalData?.users) {
-            setUsers(globalData.users);
-            setCurrentUser(prevUser => {
-                if (!prevUser) return null;
-                const updatedCurrentUser = globalData.users.find(u => u.phone === prevUser.phone);
-                return updatedCurrentUser || prevUser;
-            });
-            console.log('[REALTIME] Global user data updated.');
+    const refreshGlobalData = () => {
+        const key = 'global';
+        if (refreshDebounceTimers.current[key]) {
+            clearTimeout(refreshDebounceTimers.current[key]!);
         }
+        refreshDebounceTimers.current[key] = setTimeout(async () => {
+            console.log('[REALTIME] Debounced global refresh executing.');
+            const globalData = await db.getGlobalData();
+            if (globalData?.users) {
+                isRefreshing.current = true;
+                setUsers(globalData.users);
+                setCurrentUser(prevUser => {
+                    if (!prevUser) return null;
+                    const updatedCurrentUser = globalData.users.find(u => u.phone === prevUser.phone);
+                    return updatedCurrentUser || prevUser;
+                });
+                console.log('[REALTIME] Global user data updated via debounce.');
+            }
+            refreshDebounceTimers.current[key] = null;
+        }, 1500);
     };
 
     // --- Realtime Subscriptions ---
@@ -637,7 +656,7 @@ export const AppComponent = () => {
             console.log('[REALTIME] Removing subscriptions.');
             subscriptions.forEach(sub => supabase.removeChannel(sub));
         };
-    }, []);
+    }, [activeStoreId]); // Re-run if activeStoreId changes to update the refreshStoreData closure
 
     if (!authChecked) {
         return <GlobalLoader />;
@@ -661,17 +680,38 @@ export const AppComponent = () => {
         cart,
         setOrders: (updater: any) => {
             if(activeStoreId) {
-                setAllStoresData(p => ({...p, [activeStoreId]: { ...(p[activeStoreId] || {}), orders: typeof updater === 'function' ? updater(p[activeStoreId]?.orders || []) : updater }}))
+                // FIX: When updating store data, ensure a complete default object is provided if the store data doesn't exist yet, to satisfy the `StoreData` type.
+                setAllStoresData(p => ({
+                    ...p, 
+                    [activeStoreId]: {
+                        ...(p[activeStoreId] || { orders: [], settings: INITIAL_SETTINGS, wallet: { balance: 0, transactions: [] }, cart: [], customers: [] }),
+                        orders: typeof updater === 'function' ? updater(p[activeStoreId]?.orders || []) : updater
+                    }
+                }));
             }
         },
         setSettings: (updater: any) => {
             if(activeStoreId) {
-                setAllStoresData(p => ({...p, [activeStoreId]: { ...(p[activeStoreId] || {}), settings: typeof updater === 'function' ? updater(p[activeStoreId]?.settings || INITIAL_SETTINGS) : updater }}))
+                // FIX: When updating store data, ensure a complete default object is provided if the store data doesn't exist yet, to satisfy the `StoreData` type.
+                setAllStoresData(p => ({
+                    ...p, 
+                    [activeStoreId]: {
+                        ...(p[activeStoreId] || { orders: [], settings: INITIAL_SETTINGS, wallet: { balance: 0, transactions: [] }, cart: [], customers: [] }),
+                        settings: typeof updater === 'function' ? updater(p[activeStoreId]?.settings || INITIAL_SETTINGS) : updater
+                    }
+                }));
             }
         },
         setWallet: (updater: any) => {
              if(activeStoreId) {
-                setAllStoresData(p => ({...p, [activeStoreId]: { ...(p[activeStoreId] || {}), wallet: typeof updater === 'function' ? updater(p[activeStoreId]?.wallet || { balance: 0, transactions: [] }) : updater }}))
+                // FIX: When updating store data, ensure a complete default object is provided if the store data doesn't exist yet, to satisfy the `StoreData` type.
+                setAllStoresData(p => ({
+                    ...p, 
+                    [activeStoreId]: {
+                        ...(p[activeStoreId] || { orders: [], settings: INITIAL_SETTINGS, wallet: { balance: 0, transactions: [] }, cart: [], customers: [] }),
+                        wallet: typeof updater === 'function' ? updater(p[activeStoreId]?.wallet || { balance: 0, transactions: [] }) : updater
+                    }
+                }));
             }
         },
     };
@@ -763,6 +803,7 @@ export const AppComponent = () => {
                     <Route index element={<EmployeeDashboardPage currentUser={currentUser} orders={pageProps.orders} />} />
                     <Route path="dashboard" element={<EmployeeDashboardPage currentUser={currentUser} orders={pageProps.orders} />} />
                     <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} activeStore={pageProps.activeStore} />} />
+                    <Route path="my-activity" element={<EmployeeActivityPage currentUser={currentUser} orders={pageProps.orders} />} />
                     <Route path="account-settings" element={<EmployeeAccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
                 </Route>
 

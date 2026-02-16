@@ -373,7 +373,10 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
                 .select(dbIdColumn)
                 .eq('store_id', store.id);
 
-            if (fetchError) throw new Error(`Sync Fetch Error (${tableName}): ${fetchError.message}`);
+            if (fetchError) {
+                console.error(`Sync Fetch Error on table '${tableName}'. Deletion sync skipped. Error: ${fetchError.message}`);
+                return; // Don't throw, just log and continue
+            }
 
             const dbIds = new Set(dbItems.map((item: any) => item[dbIdColumn]));
             const stateIds = new Set(stateItems.map(item => item[stateIdColumn]));
@@ -387,7 +390,10 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
                     .eq('store_id', store.id)
                     .in(dbIdColumn, idsToDelete);
 
-                if (deleteError) throw new Error(`Sync Delete Error (${tableName}): ${deleteError.message}`);
+                if (deleteError) {
+                    console.error(`Sync Delete Error on table '${tableName}'. Some items may not have been deleted. Error: ${deleteError.message}`);
+                    // Don't throw
+                }
             }
         };
 

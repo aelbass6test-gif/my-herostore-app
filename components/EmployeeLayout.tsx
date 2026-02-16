@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { User, Store, StoreData } from '../types';
-import { Wind, LogOut, Settings, User as UserIcon, Sun, Moon, Monitor, Replace, ChevronDown, Check, LayoutDashboard, PhoneForwarded, Download, MessageSquare } from 'lucide-react';
+import { Wind, LogOut, Settings, User as UserIcon, Sun, Moon, Monitor, Replace, ChevronDown, Check, LayoutDashboard, PhoneForwarded, Download, MessageSquare, History } from 'lucide-react';
 import FloatingChat, { FloatingChatHandles } from './FloatingChat';
 import IosInstallPrompt from './IosInstallPrompt';
 
@@ -94,6 +94,7 @@ const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ currentUser, onLogout, 
                     <nav className="flex items-center gap-1">
                         <NavItem to="/employee/dashboard" icon={<LayoutDashboard size={18}/>} label="الرئيسية" />
                         <NavItem to="/employee/confirmation-queue" icon={<PhoneForwarded size={18}/>} label="تأكيد الطلبات" />
+                        <NavItem to="/employee/my-activity" icon={<History size={18}/>} label="سجل طلباتي" />
                     </nav>
 
                     {employeeStores.length > 1 && (

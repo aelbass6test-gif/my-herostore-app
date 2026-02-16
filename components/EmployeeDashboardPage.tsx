@@ -1,8 +1,7 @@
-
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Order, User } from '../types';
-import { PhoneForwarded, CheckCircle, ArrowLeft } from 'lucide-react';
+import { PhoneForwarded, CheckCircle, ArrowLeft, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface EmployeeDashboardPageProps {
@@ -28,7 +27,8 @@ const EmployeeDashboardPage: React.FC<EmployeeDashboardPageProps> = ({ orders, c
     const stats = useMemo(() => {
         const pending = orders.filter(o => o.status === 'في_انتظار_المكالمة').length;
         const confirmed = orders.filter(o => o.status === 'قيد_التنفيذ' || o.status === 'جاري_المراجعة').length;
-        return { pending, confirmed };
+        const canceled = orders.filter(o => o.status === 'ملغي').length;
+        return { pending, confirmed, canceled };
     }, [orders]);
 
     return (
@@ -47,13 +47,14 @@ const EmployeeDashboardPage: React.FC<EmployeeDashboardPageProps> = ({ orders, c
             </motion.div>
 
             <motion.div 
-                className="grid grid-cols-1 md:grid-cols-2 gap-6"
+                className="grid grid-cols-1 md:grid-cols-3 gap-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2, duration: 0.5 }}
             >
                 <StatCard title="طلبات بانتظار التأكيد" value={stats.pending} icon={<PhoneForwarded size={24}/>} colorClass="bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400" />
                 <StatCard title="طلبات مؤكدة" value={stats.confirmed} icon={<CheckCircle size={24}/>} colorClass="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" />
+                <StatCard title="طلبات ملغاة" value={stats.canceled} icon={<XCircle size={24}/>} colorClass="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" />
             </motion.div>
 
             <motion.div
@@ -76,4 +77,3 @@ const EmployeeDashboardPage: React.FC<EmployeeDashboardPageProps> = ({ orders, c
 };
 
 export default EmployeeDashboardPage;
-    
