@@ -366,34 +366,53 @@ export const saveStoreData = async (store: Store, data: StoreData): Promise<{ su
         
         const { orders = [], wallet = { balance: 0, transactions: [] }, customers = [] } = data;
         
-        // --- Handle Deletions First (Sync Logic) ---
-        // The current 'upsert' logic doesn't delete records removed from the UI. This fixes it for employees.
-        const { data: currentDbEmployees, error: fetchError } = await supabase
-            .from('employees')
-            .select('phone')
-            .eq('store_id', store.id);
-            
-        if (fetchError) {
-            throw new Error(`Sync Error: Could not fetch employees for deletion check. ${fetchError.message}`);
-        }
-        
-        const dbEmployeePhones = currentDbEmployees.map(e => e.phone);
-        const stateEmployeePhones = new Set(employees.map(e => e.id)); // In state, employee 'id' is their phone number.
-        const employeesToDelete = dbEmployeePhones.filter(phone => !stateEmployeePhones.has(phone));
+        // --- Handle Deletions by Syncing ---
+        const syncAndDelete = async (tableName: string, stateItems: any[], dbIdColumn = 'id', stateIdColumn = 'id') => {
+            const { data: dbItems, error: fetchError } = await supabase
+                .from(tableName)
+                .select(dbIdColumn)
+                .eq('store_id', store.id);
 
-        if (employeesToDelete.length > 0) {
-            const { error: deleteError } = await supabase
-                .from('employees')
-                .delete()
-                .eq('store_id', store.id)
-                .in('phone', employeesToDelete);
+            if (fetchError) throw new Error(`Sync Fetch Error (${tableName}): ${fetchError.message}`);
+
+            const dbIds = new Set(dbItems.map((item: any) => item[dbIdColumn]));
+            const stateIds = new Set(stateItems.map(item => item[stateIdColumn]));
             
-            if (deleteError) {
-                throw new Error(`Sync Error: Could not delete employees. ${deleteError.message}`);
+            const idsToDelete = [...dbIds].filter(id => !stateIds.has(id));
+
+            if (idsToDelete.length > 0) {
+                const { error: deleteError } = await supabase
+                    .from(tableName)
+                    .delete()
+                    .eq('store_id', store.id)
+                    .in(dbIdColumn, idsToDelete);
+
+                if (deleteError) throw new Error(`Sync Delete Error (${tableName}): ${deleteError.message}`);
             }
-        }
+        };
+
+        // Execute all sync operations in parallel before upserting
+        await Promise.all([
+            syncAndDelete('products', products),
+            syncAndDelete('orders', orders),
+            syncAndDelete('transactions', wallet.transactions),
+            syncAndDelete('suppliers', suppliers),
+            syncAndDelete('supply_orders', supplyOrders),
+            syncAndDelete('reviews', reviews),
+            syncAndDelete('abandoned_carts', abandonedCarts),
+            // Activity logs are typically append-only, so no deletion sync.
+            syncAndDelete('employees', employees, 'phone', 'id'), // PK is (store_id, phone), state ID is phone
+            syncAndDelete('discount_codes', discountCodes),
+            syncAndDelete('collections', collections),
+            syncAndDelete('custom_pages', customPages),
+            syncAndDelete('payment_methods', paymentMethods),
+            syncAndDelete('customers', customers),
+            syncAndDelete('global_options', globalOptions),
+            syncAndDelete('shipping_integrations', shippingIntegrations)
+        ]);
         // --- End of Deletion Logic ---
 
+        // --- Handle Upserts ---
         const saveArray = async (table: string, payload: any[], onConflict: string = 'id') => {
             if (payload && payload.length > 0) {
                 const uniquePayload = Array.from(new Map(payload.map(item => [String(item.id || `${item.store_id}_${item.phone}`), item])).values());

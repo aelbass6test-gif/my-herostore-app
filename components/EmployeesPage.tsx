@@ -300,7 +300,8 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
     let foundRole = 'custom';
     for (const roleKey in ROLES) {
       const rolePermissions = new Set(ROLES[roleKey].permissions);
-      if (currentPermissions.size === rolePermissions.size && [...currentPermissions].every(p => rolePermissions.has(p))) {
+      // FIX: The type of `p` in `.every()` was inferred as `unknown`, causing a type error. Casting to `Permission` resolves this.
+      if (currentPermissions.size === rolePermissions.size && [...currentPermissions].every(p => rolePermissions.has(p as Permission))) {
         foundRole = roleKey;
         break;
       }

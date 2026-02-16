@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Order, User, ConfirmationLog, OrderStatus, Settings } from '../types';
@@ -179,7 +178,7 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
             </div>
 
             <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex overflow-hidden min-h-[600px]">
-                <div className={`w-full md:w-1/3 border-l border-slate-200 dark:border-slate-800 flex flex-col h-full transition-all duration-300 ${activeOrder && 'hidden md:flex'}`}>
+                <div className={`w-full md:w-1/3 border-l border-slate-200 dark:border-slate-800 flex flex-col h-full transition-all duration-300 ${activeOrder ? 'hidden md:flex' : 'flex'}`}>
                     <div className="p-4 border-b border-slate-200 dark:border-slate-800">
                         <h2 className="font-bold text-slate-800 dark:text-white">طلبات جديدة ({pendingOrders.length})</h2>
                     </div>
@@ -205,7 +204,7 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                     )}
                 </div>
 
-                <div className={`w-full md:w-2/3 flex flex-col h-full transition-all duration-300 ${!activeOrder && 'hidden md:flex'}`}>
+                <div className={`w-full md:w-2/3 flex flex-col h-full transition-all duration-300 ${activeOrder ? 'flex' : 'hidden md:flex'}`}>
                     {activeOrder ? (
                         <>
                             <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 flex-shrink-0">
