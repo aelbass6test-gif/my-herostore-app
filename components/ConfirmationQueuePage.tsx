@@ -410,14 +410,60 @@ const ConfirmationQueuePage: React.FC<ConfirmationQueuePageProps> = ({ orders, s
                                     <div className="flex justify-between items-center font-black text-lg p-2 bg-slate-200 dark:bg-slate-700 rounded-lg"><span className="text-slate-800 dark:text-white">الإجمالي المطلوب:</span><span className="text-indigo-600 dark:text-indigo-400">{totalAmount.toLocaleString()} ج.م</span></div>
                                 </DetailSection>
                                 <div className="space-y-3">
-                                     <h4 className="font-bold text-slate-600 dark:text-slate-400 text-sm">تسجيل الإجراء</h4>
-                                    <div className="relative"><select value={selectedAction} onChange={e => setSelectedAction(e.target.value)} className="w-full p-3 pr-4 pl-8 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold outline-none focus:ring-2 focus:ring-indigo-500">{CONFIRMATION_ACTIONS.map(action => <option key={action} value={action}>{action}</option>)}</select><ChevronsUpDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/></div>
+                                    <h4 className="font-bold text-slate-600 dark:text-slate-400 text-sm">تسجيل إجراء ومتابعة</h4>
+                                    <div className="relative">
+                                        <select value={selectedAction} onChange={e => setSelectedAction(e.target.value)} className="w-full p-3 pr-4 pl-8 appearance-none bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+                                            {CONFIRMATION_ACTIONS.map(action => <option key={action} value={action}>{action}</option>)}
+                                        </select>
+                                        <ChevronsUpDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                                    </div>
                                     <textarea placeholder="إضافة ملاحظات (اختياري)..." rows={2} value={actionNotes} onChange={e => setActionNotes(e.target.value)} className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                                    <button onClick={() => handleActionSubmit(selectedAction)} className="w-full p-3 bg-indigo-600/10 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-lg font-bold hover:bg-indigo-600/20 flex items-center justify-center gap-2 transition-colors">
+                                        <Save size={18}/> حفظ الإجراء
+                                    </button>
                                 </div>
-                                 <div className="grid grid-cols-2 gap-3 pt-2">
-                                     <button onClick={() => handleActionSubmit('تم الإلغاء')} className="w-full p-3 bg-red-600/10 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-lg font-bold hover:bg-red-600/20 flex items-center justify-center gap-2 transition-colors"><X size={18}/> إلغاء الطلب</button>
-                                     <button onClick={() => handleActionSubmit('تم التأكيد')} className="w-full p-3 bg-emerald-600/10 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-lg font-bold hover:bg-emerald-600/20 flex items-center justify-center gap-2 transition-colors"><Check size={18}/> تأكيد الطلب</button>
-                                 </div>
+                                
+                                <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                                    <h4 className="font-bold text-slate-600 dark:text-slate-400 mb-3 text-sm flex items-center gap-2"><HistoryIcon size={16}/> سجل المكالمات</h4>
+                                    <div className="space-y-3">
+                                        {activeOrder.confirmationLogs && activeOrder.confirmationLogs.length > 0 ? (
+                                            <div className="space-y-2 max-h-40 overflow-y-auto p-1">
+                                                {activeOrder.confirmationLogs.slice().reverse().map((log, index) => (
+                                                    <div key={log.timestamp + index} className="p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg text-xs">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="font-bold text-slate-800 dark:text-white">{log.action}</span>
+                                                            <span className="text-slate-500 font-mono">{timeSince(log.timestamp)}</span>
+                                                        </div>
+                                                        <p className="text-slate-600 dark:text-slate-400 mt-1">
+                                                            بواسطة: <span className="font-bold">{log.userName}</span>
+                                                        </p>
+                                                        {log.notes && (
+                                                            <blockquote className="mt-2 p-2 bg-white dark:bg-slate-700 rounded border-r-4 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 italic">
+                                                               {log.notes}
+                                                            </blockquote>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-center text-slate-400 py-4">لا توجد سجلات سابقة.</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-slate-200 dark:border-slate-700 my-4"></div>
+
+                                <div>
+                                    <h4 className="font-bold text-slate-600 dark:text-slate-400 text-sm mb-3">اتخاذ قرار نهائي</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button onClick={() => handleActionSubmit('تم الإلغاء')} className="w-full p-3 bg-red-600/10 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-lg font-bold hover:bg-red-600/20 flex items-center justify-center gap-2 transition-colors">
+                                            <X size={18}/> إلغاء الطلب
+                                        </button>
+                                        <button onClick={() => handleActionSubmit('تم التأكيد')} className="w-full p-3 bg-emerald-600/10 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-lg font-bold hover:bg-emerald-600/20 flex items-center justify-center gap-2 transition-colors">
+                                            <Check size={18}/> تأكيد الطلب
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </>
                     ) : (
