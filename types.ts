@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 // ... (previous imports and declartions)
 
 // FIX: Declaring the 'google' object in the global scope to make it accessible across all files.
@@ -76,8 +67,14 @@ export interface Product {
   hasVariants: boolean;
   options: string[];
   variants: ProductVariant[];
-  useProfitPercentage?: boolean;
-  profitPercentage?: number;
+  
+  // For profit calculation
+  useProfitPercentage?: boolean; // Legacy, will be phased out
+  profitPercentage?: number;     // For margin mode
+
+  profitMode?: 'manual' | 'margin' | 'commission';
+  basePrice?: number;
+  commissionPercentage?: number;
 }
 
 export type TransactionCategory = 'shipping' | 'insurance' | 'inspection' | 'collection' | 'cod' | 'return' | 'manual_deposit' | 'manual_withdrawal' | 'expense_ads' | 'expense_salary' | 'expense_rent' | 'expense_other' | 'inventory_purchase';

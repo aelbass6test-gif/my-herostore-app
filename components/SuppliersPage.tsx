@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Settings, Supplier, SupplyOrder, Transaction } from '../types';
 import { UserPlus, Truck, Save, Plus, Package, Calendar, DollarSign, User } from 'lucide-react';
@@ -44,7 +43,7 @@ const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings, setSettings, se
       const order: SupplyOrder = {
           id: Date.now().toString(),
           supplierId: selectedSupplierId,
-          date: new Date().toLocaleDateString('ar-EG'),
+          date: new Date().toISOString(),
           items: orderItems,
           totalCost,
           status: 'completed'
@@ -64,7 +63,7 @@ const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings, setSettings, se
           id: `supply_${order.id}`,
           type: 'سحب',
           amount: totalCost,
-          date: new Date().toLocaleString('ar-EG'),
+          date: new Date().toISOString(),
           note: `شراء بضاعة من المورد ${supplier?.name} (فاتورة #${order.id})`,
           category: 'inventory_purchase'
       };
@@ -117,7 +116,7 @@ const SuppliersPage: React.FC<SuppliersPageProps> = ({ settings, setSettings, se
                                     <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                                         <User size={16}/> {supplier?.name || 'مورد غير معروف'}
                                     </h4>
-                                    <p className="text-xs text-slate-500 mt-1"><Calendar size={12} className="inline ml-1"/> {order.date}</p>
+                                    <p className="text-xs text-slate-500 mt-1"><Calendar size={12} className="inline ml-1"/> {new Date(order.date).toLocaleDateString('ar-EG')}</p>
                                 </div>
                                 <div className="text-left">
                                     <div className="font-black text-lg text-emerald-600">{order.totalCost.toLocaleString()} ج.م</div>

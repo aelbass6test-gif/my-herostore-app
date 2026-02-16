@@ -66,7 +66,9 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
   const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
   const [addEmployeeError, setAddEmployeeError] = useState('');
+  const [editEmployeeError, setEditEmployeeError] = useState('');
   const [newEmployeeCredentials, setNewEmployeeCredentials] = useState<{ phone: string, pass: string } | null>(null);
+  const [resetPasswordCredentials, setResetPasswordCredentials] = useState<{ phone: string, pass: string } | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
 
@@ -75,10 +77,42 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
       [users, activeStoreId]
   );
 
-  const handleSaveEmployee = (employee: Omit<Employee, 'id'> & { id?: string }) => {
-    if (employee.id) { // Update
-      setSettings(s => ({ ...s, employees: s.employees.map(e => e.id === employee.id ? (employee as Employee) : e) }));
+  const handleSaveEmployee = (employeeData: Omit<Employee, 'id'> & { id?: string }, newPassword: string | null) => {
+    if (!employeeData.id) return;
+    setEditEmployeeError('');
+
+    const originalEmployee = settings.employees.find(e => e.id === employeeData.id);
+    if (originalEmployee && originalEmployee.email !== employeeData.email) {
+        if (users.some(u => u.email === employeeData.email && u.phone !== employeeData.id)) {
+            setEditEmployeeError('هذا البريد الإلكتروني مستخدم بالفعل لحساب آخر.');
+            return;
+        }
     }
+
+    setSettings(s => ({
+        ...s,
+        employees: s.employees.map(e => e.id === employeeData.id ? (employeeData as Employee) : e)
+    }));
+
+    setUsers(prevUsers => prevUsers.map(u => {
+        if (u.phone === employeeData.id) {
+            const updatedUser: User = { 
+                ...u, 
+                fullName: employeeData.name,
+                email: employeeData.email,
+            };
+            if (newPassword) {
+                updatedUser.password = newPassword;
+            }
+            return updatedUser;
+        }
+        return u;
+    }));
+    
+    if (newPassword) {
+        setResetPasswordCredentials({ phone: employeeData.id, pass: newPassword });
+    }
+
     setIsEmployeeModalOpen(false);
     setEditingEmployee(null);
   };
@@ -86,6 +120,7 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
   const handleDeleteEmployee = () => {
     if (!employeeToDelete) return;
     setSettings(s => ({ ...s, employees: s.employees.filter(e => e.id !== employeeToDelete.id) }));
+    setUsers(prevUsers => prevUsers.filter(u => u.phone !== employeeToDelete.id));
     setEmployeeToDelete(null);
   };
   
@@ -93,31 +128,32 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
     setAddEmployeeError('');
     setNewEmployeeCredentials(null);
 
-    if (users.some(u => u.phone === data.phone || u.email === data.email)) {
-        setAddEmployeeError('مستخدم بهذا الهاتف أو البريد الإلكتروني موجود بالفعل.');
+    if (settings.employees.some(e => e.id === data.phone)) {
+        setAddEmployeeError('هذا الموظف مضاف بالفعل في هذا المتجر.');
         return;
     }
 
-    const newUser: User = {
-        fullName: data.name,
-        phone: data.phone,
-        email: data.email,
-        password: data.password,
-        joinDate: new Date().toISOString()
-    };
-    setUsers(prev => [...prev, newUser]);
+    const userByPhone = users.find(u => u.phone === data.phone);
 
-    const newEmployee: Employee = {
-        id: data.phone,
-        name: data.name,
-        email: data.email,
-        permissions: [],
-        status: 'active'
-    };
-    setSettings(s => ({ ...s, employees: [...s.employees, newEmployee] }));
+    if (userByPhone) {
+        alert(`تم العثور على حساب للمستخدم "${userByPhone.fullName}". سيتم إضافته كموظف في هذا المتجر.`);
+        const newEmployee: Employee = { id: userByPhone.phone, name: userByPhone.fullName, email: userByPhone.email, permissions: [], status: 'active' };
+        setSettings(s => ({ ...s, employees: [...(s.employees || []), newEmployee] }));
+        setIsAddEmployeeModalOpen(false);
+    } else {
+        const userByEmail = users.find(u => u.email === data.email);
+        if (userByEmail) {
+            setAddEmployeeError('هذا البريد الإلكتروني مسجل لحساب آخر.');
+            return;
+        }
 
-    setNewEmployeeCredentials({ phone: data.phone, pass: data.password });
-    setIsAddEmployeeModalOpen(false);
+        const newUser: User = { fullName: data.name, phone: data.phone, email: data.email, password: data.password, joinDate: new Date().toISOString() };
+        setUsers(prev => [...prev, newUser]);
+        const newEmployee: Employee = { id: data.phone, name: data.name, email: data.email, permissions: [], status: 'active' };
+        setSettings(s => ({ ...s, employees: [...(s.employees || []), newEmployee] }));
+        setNewEmployeeCredentials({ phone: data.phone, pass: data.password });
+        setIsAddEmployeeModalOpen(false);
+    }
   };
   
   const handleRequestAction = (employeeId: string, action: 'accept' | 'decline') => {
@@ -128,7 +164,7 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
              setEditingEmployee({ ...employee, status: 'active' });
              setIsEmployeeModalOpen(true);
          }
-     } else { // Decline
+     } else {
          setSettings(s => ({ ...s, employees: s.employees.filter(e => e.id !== employeeId) }));
      }
   };
@@ -142,12 +178,8 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
         animate="visible"
     >
       <motion.div variants={itemVariants}>
-        {newEmployeeCredentials && (
-            <CredentialsModal 
-                credentials={newEmployeeCredentials}
-                onClose={() => setNewEmployeeCredentials(null)}
-            />
-        )}
+        {newEmployeeCredentials && <CredentialsModal credentials={newEmployeeCredentials} onClose={() => setNewEmployeeCredentials(null)} />}
+        {resetPasswordCredentials && <CredentialsModal credentials={resetPasswordCredentials} onClose={() => setResetPasswordCredentials(null)} />}
       </motion.div>
       <motion.div variants={itemVariants}>
         <PermissionsCard 
@@ -164,9 +196,10 @@ const EmployeesPage: React.FC<EmployeesPageProps> = ({ settings, setSettings, cu
       {isEmployeeModalOpen && (
         <EmployeeModal 
           isOpen={isEmployeeModalOpen}
-          onClose={() => { setIsEmployeeModalOpen(false); setEditingEmployee(null); }}
+          onClose={() => { setIsEmployeeModalOpen(false); setEditingEmployee(null); setEditEmployeeError(''); }}
           onSave={handleSaveEmployee}
           employee={editingEmployee}
+          error={editEmployeeError}
         />
       )}
       
@@ -285,14 +318,21 @@ const PermissionsCard: React.FC<{ employees: Employee[], onAdd: () => void, onEd
   );
 };
 
-interface EmployeeModalProps { isOpen: boolean; onClose: () => void; onSave: (employee: Omit<Employee, 'id'> & { id?: string }) => void; employee: Employee | null; }
-const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, employee }) => {
+interface EmployeeModalProps { isOpen: boolean; onClose: () => void; onSave: (employee: Omit<Employee, 'id'> & { id?: string }, newPassword: string | null) => void; employee: Employee | null; error: string; }
+const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, employee, error }) => {
   const [formData, setFormData] = useState({ name: '', email: '', permissions: [] as Permission[] });
   const [activeRole, setActiveRole] = useState('custom');
+  const [newPassword, setNewPassword] = useState<string | null>(null);
   
+  const generateRandomPassword = () => Math.random().toString(36).slice(-8);
+
   useEffect(() => {
-    if (employee) { setFormData({ name: employee.name, email: employee.email, permissions: employee.permissions || [] }); } 
-    else { setFormData({ name: '', email: '', permissions: [] }); }
+    if (employee) { 
+        setFormData({ name: employee.name, email: employee.email, permissions: employee.permissions || [] });
+        setNewPassword(null);
+    } else { 
+        setFormData({ name: '', email: '', permissions: [] }); 
+    }
   }, [employee, isOpen]);
 
   useEffect(() => {
@@ -300,7 +340,6 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
     let foundRole = 'custom';
     for (const roleKey in ROLES) {
       const rolePermissions = new Set(ROLES[roleKey].permissions);
-      // FIX: The type of `p` in `.every()` was inferred as `unknown`, causing a type error. Casting to `Permission` resolves this.
       if (currentPermissions.size === rolePermissions.size && [...currentPermissions].every(p => rolePermissions.has(p as Permission))) {
         foundRole = roleKey;
         break;
@@ -322,10 +361,14 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
       setFormData(prev => ({ ...prev, permissions: [...ROLES[roleKey].permissions] }));
     }
   };
+  
+  const handleResetPassword = () => {
+    setNewPassword(generateRandomPassword());
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ ...employee, ...formData });
+    onSave({ ...employee, ...formData }, newPassword);
   };
   
   if (!isOpen) return null;
@@ -337,32 +380,32 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
       <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] text-right border border-slate-300 dark:border-slate-800">
         <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
           <h3 className="text-xl font-black dark:text-white flex items-center gap-3">
-            <UserCog className="text-purple-600" /> تعديل صلاحيات الموظف
+            <UserCog className="text-purple-600" /> إدارة الموظف
           </h3>
           <button onClick={onClose}><XCircle className="text-slate-400 hover:text-red-500"/></button>
         </div>
         <form onSubmit={handleSubmit} id="permission-form" className="flex-1 overflow-y-auto p-8 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div><label className="text-sm font-bold text-slate-700 dark:text-slate-400">اسم الموظف</label><input type="text" readOnly value={formData.name} className="mt-2 w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none" /></div>
-            <div><label className="text-sm font-bold text-slate-700 dark:text-slate-400">البريد الإلكتروني</label><input type="email" readOnly value={formData.email} className="mt-2 w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none" /></div>
+            <div><label className="text-sm font-bold text-slate-700 dark:text-slate-400">اسم الموظف</label><input type="text" value={formData.name} onChange={e => setFormData(p => ({...p, name: e.target.value}))} className="mt-2 w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500" /></div>
+            <div><label className="text-sm font-bold text-slate-700 dark:text-slate-400">البريد الإلكتروني</label><input type="email" value={formData.email} onChange={e => setFormData(p => ({...p, email: e.target.value}))} className="mt-2 w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500" /></div>
+          </div>
+          <div>
+              <h4 className="text-lg font-bold dark:text-white mb-4 flex items-center gap-2"><KeyRound/> إعادة تعيين كلمة المرور</h4>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-800 flex justify-between items-center">
+                  <p className="font-bold text-sm text-slate-700 dark:text-slate-300">إنشاء كلمة مرور جديدة ومؤقتة للموظف.</p>
+                  <button type="button" onClick={handleResetPassword} className="px-4 py-2 text-xs font-bold bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 whitespace-nowrap">إنشاء كلمة مرور</button>
+              </div>
+              {newPassword && (
+                  <div className="mt-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-700 dark:text-emerald-300 font-bold text-sm flex items-center justify-between">
+                      <span>كلمة المرور الجديدة: <span className="font-mono">{newPassword}</span></span>
+                      <button type="button" onClick={() => navigator.clipboard.writeText(newPassword)}><Copy size={16}/></button>
+                  </div>
+              )}
           </div>
           <div>
               <h4 className="text-lg font-bold dark:text-white mb-4 flex items-center gap-2"><UserCog size={20}/> اختر دوراً سريعاً</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {Object.entries(ROLES).map(([key, role]) => (
-                      <button
-                          key={key}
-                          type="button"
-                          onClick={() => handleRoleSelect(key)}
-                          className={`p-4 rounded-xl border-2 text-center font-bold transition-all ${
-                          activeRole === key
-                              ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-500 text-purple-700 dark:text-purple-300'
-                              : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-purple-400'
-                          }`}
-                      >
-                          {role.name}
-                      </button>
-                  ))}
+                  {Object.entries(ROLES).map(([key, role]) => ( <button key={key} type="button" onClick={() => handleRoleSelect(key)} className={`p-4 rounded-xl border-2 text-center font-bold transition-all ${ activeRole === key ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-500 text-purple-700 dark:text-purple-300' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-purple-400' }`}> {role.name} </button> ))}
               </div>
           </div>
           <div>
@@ -377,20 +420,16 @@ const EmployeeModal: React.FC<EmployeeModalProps> = ({ isOpen, onClose, onSave, 
               {PERMISSION_GROUPS.map(group => (
                 <div key={group.title} className="space-y-3">
                   <h5 className="font-black text-purple-800 dark:text-purple-400">{group.title}</h5>
-                  {group.permissions.map(perm => (
-                    <label key={perm.key} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-800 cursor-pointer">
-                      <input type="checkbox" checked={formData.permissions.includes(perm.key)} onChange={e => handlePermissionChange(perm.key, e.target.checked)} className="rounded text-purple-600 focus:ring-purple-500"/>
-                      <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{perm.label}</span>
-                    </label>
-                  ))}
+                  {group.permissions.map(perm => ( <label key={perm.key} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border dark:border-slate-800 cursor-pointer"> <input type="checkbox" checked={formData.permissions.includes(perm.key)} onChange={e => handlePermissionChange(perm.key, e.target.checked)} className="rounded text-purple-600 focus:ring-purple-500"/> <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{perm.label}</span> </label> ))}
                 </div>
               ))}
             </div>
           </div>
+          {error && <div className="p-3 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-center font-bold text-sm">{error}</div>}
         </form>
         <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-t dark:border-slate-800 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="px-8 py-3 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl font-black">إلغاء</button>
-          <button type="submit" form="permission-form" onClick={handleSubmit} className="px-8 py-3 bg-purple-600 text-white rounded-xl font-black hover:bg-purple-700 transition-colors">حفظ</button>
+          <button type="submit" form="permission-form" onClick={handleSubmit} className="px-8 py-3 bg-purple-600 text-white rounded-xl font-black hover:bg-purple-700 transition-colors">حفظ التغييرات</button>
         </div>
       </div>
     </div>
@@ -450,8 +489,8 @@ const CredentialsModal: React.FC<CredentialsModalProps> = ({ credentials, onClos
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
             <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl p-6 text-center">
                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><Check size={32}/></div>
-                <h3 className="text-xl font-bold dark:text-white">تمت الإضافة بنجاح!</h3>
-                <p className="text-sm text-slate-500 mb-4">شارك بيانات الدخول التالية مع الموظف.</p>
+                <h3 className="text-xl font-bold dark:text-white">تمت العملية بنجاح!</h3>
+                <p className="text-sm text-slate-500 mb-4">شارك بيانات الدخول الجديدة مع الموظف.</p>
                 <div className="space-y-3 text-right">
                     <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
                         <label className="text-xs text-slate-400 font-bold">رقم الهاتف</label>

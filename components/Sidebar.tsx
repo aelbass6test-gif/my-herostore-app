@@ -5,7 +5,7 @@ import {
     LayoutDashboard, ShoppingCart, Eye, PhoneForwarded,
     Archive, Package, ClipboardList, ListOrdered, Star, Grid3x3, Users, Truck, Percent, 
     Wallet as WalletIcon, ArrowRightLeft, LayoutGrid, Brush, FileText, Globe, BarChart2, Shield, 
-    AppWindow, Settings2, CreditCard, Landmark, Users2, Code, Receipt, ChevronRight, X, UserCog, History, Megaphone, MessageSquare, Wand2 
+    AppWindow, Settings2, CreditCard, Landmark, Users2, Code, Receipt, ChevronRight, X, UserCog, History, Megaphone, MessageSquare, Wand2, DollarSign 
 } from 'lucide-react';
 import { Store as StoreType } from '../types';
 
@@ -72,6 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeStore, isOpen, onClose }) => {
             title: 'المحفظة',
             links: [
                 { to: '/wallet', label: 'المحفظة', icon: <WalletIcon size={20} /> },
+                { to: '/expenses', label: 'المصروفات', icon: <DollarSign size={20} /> },
                 { to: '/collections-report', label: 'التحصيلات', icon: <Receipt size={20} /> },
                 { to: '/withdrawals', label: 'عمليات السحب', icon: <ArrowRightLeft size={20} /> },
             ]

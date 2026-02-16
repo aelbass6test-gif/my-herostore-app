@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Wallet, Transaction, TransactionCategory } from '../types';
 import { DollarSign, Plus, TrendingDown, PieChart as PieChartIcon, Calendar, Trash2, Tag, Receipt } from 'lucide-react';
@@ -25,7 +24,7 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ wallet, setWallet }) => {
   const expenses = useMemo(() => {
       return wallet.transactions
         .filter(t => t.category && t.category.startsWith('expense_'))
-        .sort((a, b) => new Date(b.id).getTime() - new Date(a.id).getTime()); // Assuming ID is timestamp
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [wallet.transactions]);
 
   const stats = useMemo(() => {
@@ -39,28 +38,55 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ wallet, setWallet }) => {
   }, [expenses]);
 
   const handleAddExpense = (e: React.FormEvent) => {
-      e.preventDefault();
-      const numAmount = parseFloat(amount);
-      if (isNaN(numAmount) || numAmount <= 0) return;
+    e.preventDefault();
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) return;
 
-      const newTransaction: Transaction = {
-          id: Date.now().toString(),
-          type: 'سحب',
-          amount: numAmount,
-          date: new Date().toLocaleString('ar-EG'),
-          note: description || 'مصروف جديد',
-          category: category
-      };
+    const newTransaction: Transaction = {
+        id: Date.now().toString(),
+        type: 'سحب',
+        amount: numAmount,
+        date: new Date().toISOString(),
+        note: description || 'مصروف جديد',
+        category: category
+    };
 
-      setWallet(prev => ({ ...prev, transactions: [newTransaction, ...prev.transactions] }));
-      setShowAddModal(false);
-      setAmount('');
-      setDescription('');
+    setWallet(prevWallet => {
+        // Ensure balance is treated as a number to prevent data corruption
+        const currentBalance = Number(prevWallet.balance) || 0;
+        return {
+            balance: currentBalance - numAmount,
+            transactions: [newTransaction, ...prevWallet.transactions]
+        };
+    });
+
+    setShowAddModal(false);
+    setAmount('');
+    setDescription('');
   };
 
   const deleteExpense = (id: string) => {
       if(!window.confirm("هل أنت متأكد من حذف هذا المصروف؟ سيتم إعادة المبلغ للمحفظة.")) return;
-      setWallet(prev => ({ ...prev, transactions: prev.transactions.filter(t => t.id !== id) }));
+      
+      setWallet(prevWallet => {
+        const transactionToDelete = prevWallet.transactions.find(t => t.id === id);
+        if (!transactionToDelete) {
+            return prevWallet;
+        }
+        
+        const updatedTransactions = prevWallet.transactions.filter(t => t.id !== id);
+        
+        // Ensure both balance and amount are numbers before performing arithmetic
+        const currentBalance = Number(prevWallet.balance) || 0;
+        const amountToDelete = Number(transactionToDelete.amount) || 0;
+        
+        const newBalance = currentBalance + amountToDelete;
+
+        return {
+            balance: newBalance,
+            transactions: updatedTransactions
+        };
+    });
   };
 
   return (
@@ -155,7 +181,7 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ wallet, setWallet }) => {
                                                 {catInfo?.label || 'عام'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{exp.date}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{new Date(exp.date).toLocaleString('ar-EG')}</td>
                                         <td className="px-6 py-4 text-center font-black text-red-600">-{exp.amount.toLocaleString()} ج.م</td>
                                         <td className="px-6 py-4 text-left">
                                             <button onClick={() => deleteExpense(exp.id)} className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>

@@ -10,7 +10,11 @@ interface FloatingChatProps {
     activeStoreId: string | null;
 }
 
-const FloatingChat: React.FC<FloatingChatProps> = ({ currentUser, storeOwner, activeStoreId }) => {
+export interface FloatingChatHandles {
+    toggle: () => void;
+}
+
+const FloatingChat = React.forwardRef<FloatingChatHandles, FloatingChatProps>(({ currentUser, storeOwner, activeStoreId }, ref) => {
     const [isOpen, setIsOpen] = useState(false);
     const [activeChat, setActiveChat] = useState<{ id: string, name: string, icon: React.ReactElement } | null>(null);
     const [message, setMessage] = useState('');
@@ -25,6 +29,10 @@ const FloatingChat: React.FC<FloatingChatProps> = ({ currentUser, storeOwner, ac
         // Future: c.push({ id: 'team', name: 'فريق العمل', icon: <Users size={20} /> });
         return c;
     }, [storeOwner]);
+
+    React.useImperativeHandle(ref, () => ({
+        toggle: () => setIsOpen(p => !p)
+    }));
 
     useEffect(() => {
         if (chatBodyRef.current) {
@@ -100,17 +108,6 @@ const FloatingChat: React.FC<FloatingChatProps> = ({ currentUser, storeOwner, ac
 
     return (
         <>
-            <div className="fixed bottom-6 left-6 z-50">
-                <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setIsOpen(true)}
-                    className="bg-indigo-600 text-white w-16 h-16 rounded-full shadow-lg flex items-center justify-center"
-                >
-                    <MessageSquare size={32} />
-                </motion.button>
-            </div>
-
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -118,7 +115,7 @@ const FloatingChat: React.FC<FloatingChatProps> = ({ currentUser, storeOwner, ac
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 50, scale: 0.9 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                        className="fixed bottom-24 left-6 z-50 w-80 h-[450px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
+                        className="fixed bottom-6 left-6 z-50 w-80 h-[450px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
                     >
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
                             <div className="flex items-center gap-2">
@@ -173,6 +170,6 @@ const FloatingChat: React.FC<FloatingChatProps> = ({ currentUser, storeOwner, ac
             </AnimatePresence>
         </>
     );
-};
+});
 
 export default FloatingChat;

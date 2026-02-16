@@ -1,6 +1,6 @@
 import React from 'react';
-import { Loader2, CheckCircle, AlertTriangle, Save } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Loader2, CheckCircle, AlertTriangle, Save } from 'lucide-react';
 
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'success' | 'error';
 
@@ -10,33 +10,32 @@ interface GlobalSaveIndicatorProps {
 }
 
 const GlobalSaveIndicator: React.FC<GlobalSaveIndicatorProps> = ({ status, message }) => {
-  const statusConfig = {
-    pending: { icon: <Save size={18} className="text-slate-400" />, bg: 'bg-slate-800' },
-    saving: { icon: <Loader2 className="animate-spin" size={18} />, bg: 'bg-slate-800' },
-    success: { icon: <CheckCircle size={18} className="text-emerald-400" />, bg: 'bg-slate-800' },
-    error: { icon: <AlertTriangle size={18} className="text-red-400" />, bg: 'bg-red-900/50' },
+  const config: any = {
+    pending: { icon: <Save size={16} className="text-slate-500 dark:text-slate-400" /> },
+    saving: { icon: <Loader2 size={16} className="animate-spin text-blue-500" /> },
+    success: { icon: <CheckCircle size={16} className="text-emerald-500" /> },
+    error: { icon: <AlertTriangle size={16} className="text-red-500" /> },
   };
 
-  const currentConfig = status !== 'idle' ? statusConfig[status] : null;
+  const current = config[status];
 
   return (
-    <AnimatePresence>
-      {status !== 'idle' && currentConfig && (
-        <motion.div
-          key={status}
-          initial={{ opacity: 0, y: 50, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 50, scale: 0.9 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200]"
-        >
-          <div className={`flex items-center gap-3 px-6 py-3 text-white rounded-full shadow-2xl border border-slate-700 ${currentConfig.bg}`}>
-            {currentConfig.icon}
-            <span className="font-bold text-sm">{message}</span>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[200]">
+      <AnimatePresence>
+        {status !== 'idle' && (
+          <motion.div
+            key={status}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-full shadow-lg border border-slate-200 dark:border-slate-700"
+          >
+            {current.icon}
+            <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 };
 

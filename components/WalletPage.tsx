@@ -71,7 +71,7 @@ const TransactionDetailsModal: React.FC<{
                         <div key={t.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg group">
                             <div>
                                 <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{t.note}</p>
-                                <p className="text-xs text-slate-400 font-mono">{t.date}</p>
+                                <p className="text-xs text-slate-400 font-mono">{new Date(t.date).toLocaleString('ar-EG')}</p>
                             </div>
                             <div className="flex items-center gap-4">
                                <span className={`font-bold ${t.type === 'إيداع' ? 'text-emerald-500' : 'text-red-500'}`}>
@@ -206,7 +206,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ wallet, setWallet, orders, sett
       id: Date.now().toString(),
       type: modalType,
       amount: numAmount,
-      date: new Date().toLocaleString('ar-EG'),
+      date: new Date().toISOString(),
       note: note || (modalType === 'إيداع' ? 'إيداع يدوي' : 'سحب يدوي'),
       category: modalType === 'إيداع' ? 'manual_deposit' : 'manual_withdrawal'
     };
@@ -298,7 +298,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ wallet, setWallet, orders, sett
                       <td className="px-6 py-4">
                           <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold px-2 py-1 rounded">عملية مجمعة</span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{item.lastTransactionDate}</td>
+                      <td className="px-6 py-4 text-xs text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{new Date(item.lastTransactionDate).toLocaleString('ar-EG')}</td>
                       <td className="px-6 py-4 text-center">
                           <span className={`font-black text-lg ${item.netAmount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                              {item.netAmount >= 0 ? '+' : ''}{item.netAmount.toLocaleString()} ج.م
@@ -319,7 +319,7 @@ const WalletPage: React.FC<WalletPageProps> = ({ wallet, setWallet, orders, sett
                       <td className="px-6 py-4">
                           <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold px-2 py-1 rounded">عملية يدوية</span>
                       </td>
-                      <td className="px-6 py-4 text-xs text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{t.date}</td>
+                      <td className="px-6 py-4 text-xs text-slate-500 font-mono"><Calendar size={12} className="inline ml-1"/>{new Date(t.date).toLocaleString('ar-EG')}</td>
                       <td className="px-6 py-4 text-center">
                         <span className={`flex items-center justify-center gap-1 font-bold ${t.type === 'إيداع' ? 'text-emerald-500' : 'text-red-500'}`}>
                            {t.type === 'إيداع' ? <ArrowUpRight size={14}/> : <ArrowDownLeft size={14}/>} {t.amount.toLocaleString()} ج.م

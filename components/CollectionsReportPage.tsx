@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Search, History, TrendingUp, Coins, ShieldCheck, Banknote, Calendar, Package, MapPin, Truck, Info, X, Receipt } from 'lucide-react';
-import { Order, Settings } from '../types';
+import { Search, History, TrendingUp, Coins, ShieldCheck, Banknote, Calendar, Package, MapPin, Truck, Info, X, Receipt, Printer } from 'lucide-react';
+import { Order, Settings, Store } from '../types';
+import { generateCollectionsReportHTML } from '../utils/reportGenerator';
 
 interface CollectionsReportPageProps {
   orders: Order[];
   settings: Settings;
+  activeStore?: Store;
 }
 
 interface BreakdownDetails {
@@ -20,7 +22,7 @@ interface BreakdownDetails {
   net: number;
 }
 
-const CollectionsReportPage: React.FC<CollectionsReportPageProps> = ({ orders, settings }) => {
+const CollectionsReportPage: React.FC<CollectionsReportPageProps> = ({ orders, settings, activeStore }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBreakdown, setSelectedBreakdown] = useState<BreakdownDetails | null>(null);
 
@@ -109,6 +111,19 @@ const CollectionsReportPage: React.FC<CollectionsReportPageProps> = ({ orders, s
     });
   };
 
+  const handlePrintReport = () => {
+    const storeName = activeStore?.name || 'متجري';
+    const html = generateCollectionsReportHTML(collectedOrders, settings, storeName);
+    const win = window.open('', '_blank');
+    if (win) {
+        win.document.write(html);
+        win.document.close();
+    } else {
+        alert("يرجى السماح بالنوافذ المنبثقة لطباعة التقرير.");
+    }
+  };
+
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -126,15 +141,24 @@ const CollectionsReportPage: React.FC<CollectionsReportPageProps> = ({ orders, s
             </div>
             <h3 className="text-lg font-black dark:text-white text-right">سجل التحصيلات التفصيلي</h3>
           </div>
-          <div className="relative w-full md:w-80">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="بحث في السجل..." 
-              className="w-full pr-10 pl-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl outline-none border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500 dark:text-white" 
-              value={searchTerm} 
-              onChange={e => setSearchTerm(e.target.value)} 
-            />
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="relative flex-1 md:flex-initial">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="بحث في السجل..." 
+                  className="w-full pr-10 pl-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl outline-none border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500 dark:text-white" 
+                  value={searchTerm} 
+                  onChange={e => setSearchTerm(e.target.value)} 
+                />
+            </div>
+            <button
+                onClick={handlePrintReport}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-all"
+            >
+                <Printer size={16} />
+                <span>طباعة</span>
+            </button>
           </div>
         </div>
 

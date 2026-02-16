@@ -1,9 +1,8 @@
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { User, Store, StoreData } from '../types';
-import { Wind, LogOut, Settings, User as UserIcon, Sun, Moon, Monitor, Replace, ChevronDown, Check, LayoutDashboard, PhoneForwarded, Download } from 'lucide-react';
-import FloatingChat from './FloatingChat';
+import { Wind, LogOut, Settings, User as UserIcon, Sun, Moon, Monitor, Replace, ChevronDown, Check, LayoutDashboard, PhoneForwarded, Download, MessageSquare } from 'lucide-react';
+import FloatingChat, { FloatingChatHandles } from './FloatingChat';
 import IosInstallPrompt from './IosInstallPrompt';
 
 interface EmployeeLayoutProps {
@@ -29,6 +28,7 @@ const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ currentUser, onLogout, 
     const [showIosInstallModal, setShowIosInstallModal] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
     const storeMenuRef = useRef<HTMLDivElement>(null);
+    const chatRef = useRef<FloatingChatHandles>(null);
 
     const employeeStores = useMemo(() => {
         if (!currentUser) return [];
@@ -120,60 +120,68 @@ const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({ currentUser, onLogout, 
                          </div>
                     )}
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                        <div className="font-bold text-sm text-slate-800 dark:text-white">{currentUser?.fullName}</div>
-                        <div className="text-xs text-slate-500">موظف تأكيد طلبات</div>
-                    </div>
-                    <div className="relative" ref={userMenuRef}>
-                        <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="flex items-center gap-2">
-                            <div className="w-10 h-10 rounded-full font-bold flex items-center justify-center text-sm bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-2 border-white dark:border-slate-900">
-                                {currentUser ? getUserInitials(currentUser.fullName) : '..'}
-                            </div>
-                        </button>
-                        {isUserMenuOpen && (
-                            <div className="absolute left-0 top-14 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-200 p-2 z-50">
-                                {!isStandalone && installPrompt && (
-                                    <button
-                                        onClick={() => { onInstall(); setIsUserMenuOpen(false); }}
-                                        className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm"
-                                    >
-                                        <Download size={16} /> <span>تثبيت التطبيق</span>
-                                    </button>
-                                )}
-                                {!isStandalone && isIos && !installPrompt && (
-                                    <button
-                                        onClick={() => { setShowIosInstallModal(true); setIsUserMenuOpen(false); }}
-                                        className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm"
-                                    >
-                                        <Download size={16} /> <span>تثبيت على آيفون</span>
-                                    </button>
-                                )}
-                                <Link to="/employee/account-settings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">
-                                    <Settings size={16} /> <span>إعدادات الحساب</span>
-                                </Link>
-                                <div className="w-full h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
-                                <div className="px-3 py-2">
-                                    <p className="text-xs font-bold text-slate-400 mb-2">المظهر</p>
-                                    <div className="flex bg-slate-100 dark:bg-slate-700 rounded-md p-1 gap-1">
-                                        <button onClick={() => setTheme('light')} className={`w-full flex justify-center items-center gap-1.5 py-1 text-xs rounded-sm font-bold transition-colors ${theme === 'light' ? 'bg-white dark:bg-slate-900 shadow text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600'}`}><Sun size={14}/><span>فاتح</span></button>
-                                        <button onClick={() => setTheme('dark')} className={`w-full flex justify-center items-center gap-1.5 py-1 text-xs rounded-sm font-bold transition-colors ${theme === 'dark' ? 'bg-white dark:bg-slate-900 shadow text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600'}`}><Moon size={14}/><span>داكن</span></button>
-                                        <button onClick={() => setTheme('system')} className={`w-full flex justify-center items-center gap-1.5 py-1 text-xs rounded-sm font-bold transition-colors ${theme === 'system' ? 'bg-white dark:bg-slate-900 shadow text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600'}`}><Monitor size={14}/><span>النظام</span></button>
-                                    </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => chatRef.current?.toggle()}
+                        className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                        <MessageSquare size={20} />
+                    </button>
+                    <div className="flex items-center gap-4">
+                        <div className="text-right hidden sm:block">
+                            <div className="font-bold text-sm text-slate-800 dark:text-white">{currentUser?.fullName}</div>
+                            <div className="text-xs text-slate-500">موظف تأكيد طلبات</div>
+                        </div>
+                        <div className="relative" ref={userMenuRef}>
+                            <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="flex items-center gap-2">
+                                <div className="w-10 h-10 rounded-full font-bold flex items-center justify-center text-sm bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-2 border-white dark:border-slate-900">
+                                    {currentUser ? getUserInitials(currentUser.fullName) : '..'}
                                 </div>
-                                <div className="w-full h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
-                                <button onClick={onLogout} className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-red-500 font-bold text-sm">
-                                    <LogOut size={16} /> <span>تسجيل الخروج</span>
-                                </button>
-                            </div>
-                        )}
+                            </button>
+                            {isUserMenuOpen && (
+                                <div className="absolute left-0 top-14 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-200 p-2 z-50">
+                                    {!isStandalone && installPrompt && (
+                                        <button
+                                            onClick={() => { onInstall(); setIsUserMenuOpen(false); }}
+                                            className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm"
+                                        >
+                                            <Download size={16} /> <span>تثبيت التطبيق</span>
+                                        </button>
+                                    )}
+                                    {!isStandalone && isIos && !installPrompt && (
+                                        <button
+                                            onClick={() => { setShowIosInstallModal(true); setIsUserMenuOpen(false); }}
+                                            className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm"
+                                        >
+                                            <Download size={16} /> <span>تثبيت على آيفون</span>
+                                        </button>
+                                    )}
+                                    <Link to="/employee/account-settings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm">
+                                        <Settings size={16} /> <span>إعدادات الحساب</span>
+                                    </Link>
+                                    <div className="w-full h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
+                                    <div className="px-3 py-2">
+                                        <p className="text-xs font-bold text-slate-400 mb-2">المظهر</p>
+                                        <div className="flex bg-slate-100 dark:bg-slate-700 rounded-md p-1 gap-1">
+                                            <button onClick={() => setTheme('light')} className={`w-full flex justify-center items-center gap-1.5 py-1 text-xs rounded-sm font-bold transition-colors ${theme === 'light' ? 'bg-white dark:bg-slate-900 shadow text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600'}`}><Sun size={14}/><span>فاتح</span></button>
+                                            <button onClick={() => setTheme('dark')} className={`w-full flex justify-center items-center gap-1.5 py-1 text-xs rounded-sm font-bold transition-colors ${theme === 'dark' ? 'bg-white dark:bg-slate-900 shadow text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600'}`}><Moon size={14}/><span>داكن</span></button>
+                                            <button onClick={() => setTheme('system')} className={`w-full flex justify-center items-center gap-1.5 py-1 text-xs rounded-sm font-bold transition-colors ${theme === 'system' ? 'bg-white dark:bg-slate-900 shadow text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600'}`}><Monitor size={14}/><span>النظام</span></button>
+                                        </div>
+                                    </div>
+                                    <div className="w-full h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
+                                    <button onClick={onLogout} className="w-full text-right flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-red-500 font-bold text-sm">
+                                        <LogOut size={16} /> <span>تسجيل الخروج</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>
             <main className="flex-1 overflow-y-auto">
                 {children}
             </main>
-            <FloatingChat currentUser={currentUser} storeOwner={storeOwner} activeStoreId={activeStoreId} />
+            <FloatingChat ref={chatRef} currentUser={currentUser} storeOwner={storeOwner} activeStoreId={activeStoreId} />
             {showIosInstallModal && <IosInstallPrompt onClose={() => setShowIosInstallModal(false)} />}
         </div>
     );

@@ -1,8 +1,3 @@
-
-
-
-
-
 import React, { useState } from 'react';
 import { Order, Wallet, Settings } from '../types';
 // FIX: Aliased `BarChart` from `lucide-react` to avoid a name conflict with `recharts`.
@@ -38,6 +33,12 @@ const DynamicChart: React.FC<{ chart: ChartData }> = ({ chart }) => {
     return (
         <div className="w-full h-80 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
             <h4 className="font-bold text-center text-slate-700 dark:text-slate-300 mb-4">{chart.title}</h4>
+            {/* 
+                NOTE: The Recharts library currently produces a console warning about `defaultProps`.
+                This is a known issue in the library and does not affect chart functionality.
+                It can be safely ignored until a future version of Recharts resolves it.
+                See: https://github.com/recharts/recharts/issues/3615
+            */}
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 {chart.type === 'bar' ? (
                     <BarChart data={chart.data} layout="vertical" margin={{ left: 20, right: 30 }}>

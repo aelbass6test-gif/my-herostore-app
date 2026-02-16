@@ -5,6 +5,7 @@ import { Order, Settings, Wallet, User, CustomerProfile } from '../types';
 import { Link } from 'react-router-dom';
 import { motion, Variants } from 'framer-motion';
 import { generateDashboardSuggestions } from '../services/geminiService';
+import { calculateOrderProfitLoss } from '../utils/financials';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -118,7 +119,8 @@ const Dashboard = ({ orders, settings, wallet, currentUser }: { orders: Order[],
   const [showVideoBanner, setShowVideoBanner] = useState(true);
 
   const stats = useMemo(() => {
-    let totalProfit = 0; let totalLoss = 0;
+    let totalProfit = 0;
+    let totalLoss = 0;
     let counts: Record<string, number> = {
       'في_انتظار_المكالمة': 0,
       'جاري_المراجعة': 0, 'قيد_التنفيذ': 0, 'تم_الارسال': 0, 'قيد_الشحن': 0,
@@ -128,42 +130,12 @@ const Dashboard = ({ orders, settings, wallet, currentUser }: { orders: Order[],
 
     orders.forEach((o: Order) => {
       if (counts[o.status] !== undefined) counts[o.status]++;
-      if (o.status === 'ملغي' || o.status === 'جاري_المراجعة' || o.status === 'قيد_التنفيذ' || o.status === 'في_انتظار_المكالمة') return;
-
-      const compFees = settings.companySpecificFees?.[o.shippingCompany];
-      const useCustom = compFees?.useCustomFees ?? false;
       
-      const insuranceRate = useCustom ? compFees!.insuranceFeePercent : (settings.enableInsurance ? settings.insuranceFeePercent : 0);
-      const inspectionCost = useCustom ? compFees!.inspectionFee : (settings.enableInspection ? settings.inspectionFee : 0);
-      
-      const isInsured = o.isInsured ?? true; // Backward compatibility
-      const insuranceFee = isInsured ? ((o.productPrice + o.shippingFee) * insuranceRate) / 100 : 0;
-
-      if (o.status === 'تم_التحصيل') {
-        const threshold = useCustom ? compFees!.codThreshold : settings.codThreshold;
-        const rate = useCustom ? compFees!.codFeeRate : settings.codFeeRate;
-        const tax = useCustom ? compFees!.codTaxRate : settings.codTaxRate;
-        const totalAmount = o.productPrice + o.shippingFee;
-        
-        let codFee = 0;
-        if (totalAmount > threshold) {
-          const taxableAmount = totalAmount - threshold;
-          const fee = taxableAmount * rate;
-          codFee = fee * (1 + tax);
-        }
-
-        const inspectionAdjustment = o.inspectionFeePaidByCustomer ? 0 : inspectionCost;
-        totalProfit += (o.productPrice - o.productCost - insuranceFee - inspectionAdjustment - codFee);
-      } else if (o.status === 'مرتجع' || o.status === 'فشل_التوصيل') {
-        const applyReturnFee = useCustom ? (compFees?.enableFixedReturn ?? false) : settings.enableReturnShipping;
-        const returnFeeAmount = applyReturnFee ? (useCustom ? compFees!.returnShippingFee : settings.returnShippingFee) : 0;
-        
-        const inspectionFeeCollected = o.inspectionFeePaidByCustomer ? inspectionCost : 0;
-        totalLoss += (o.productCost + insuranceFee + o.shippingFee + inspectionCost + returnFeeAmount - inspectionFeeCollected);
-      } else if (o.status === 'مرتجع_جزئي') {
-        totalLoss += (insuranceFee + inspectionCost);
-      }
+      const { profit, loss } = calculateOrderProfitLoss(o, settings);
+      totalProfit += profit;
+      totalLoss += loss;
     });
+
     return { net: totalProfit - totalLoss, counts, total: orders.length };
   }, [orders, settings]);
 

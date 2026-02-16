@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Package, Plus, Trash2, Edit3, Save, XCircle, Search, AlertCircle, Barcode, DollarSign, Scale, Wallet, RefreshCw, ServerOff, Image as ImageIcon, CheckCircle, Clock, Download, Layers, Grid3x3, Wand2, FileText, Copy, ChevronsUpDown, Percent, Upload, FileUp, ListChecks, FileWarning } from 'lucide-react';
+import { Package, Plus, Trash2, Edit3, Save, XCircle, Search, AlertCircle, Barcode, DollarSign, Scale, Wallet, RefreshCw, ServerOff, Image as ImageIcon, CheckCircle, Clock, Download, Layers, Grid3x3, Wand2, FileText, Copy, ChevronsUpDown, Percent, Upload, FileUp, ListChecks, FileWarning, HandCoins } from 'lucide-react';
 import { Settings, Product, ProductVariant } from '../types';
 import { fetchWuiltProducts } from '../services/platformService';
 import { motion, Variants } from 'framer-motion';
@@ -32,7 +31,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [newProduct, setNewProduct] = useState<Partial<Product>>({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], thumbnail: '', hasVariants: false, options: [], variants: [], useProfitPercentage: false, profitPercentage: 0 });
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], thumbnail: '', hasVariants: false, options: [], variants: [], profitMode: 'manual', profitPercentage: 0, basePrice: 0, commissionPercentage: 0 });
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string | null }>({ type: 'idle', message: null });
@@ -70,20 +69,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
         finalStock = productData.variants.reduce((sum, v) => sum + v.stockQuantity, 0);
     }
     
-    let finalCostPrice = productData.costPrice || 0;
-    if (productData.useProfitPercentage) {
-        const price = productData.price || 0;
-        const percentage = productData.profitPercentage || 0;
-        finalCostPrice = price * (1 - (percentage / 100));
-    }
-
     const productToSave: Product = {
         id: productData.id || `prod-${Date.now()}`,
         sku: productData.sku || `SKU-${Date.now()}`,
         name: productData.name!,
         price: productData.price || 0,
         weight: productData.weight || 1,
-        costPrice: finalCostPrice,
+        costPrice: productData.costPrice || 0,
         stockQuantity: finalStock,
         inStock: finalStock > 0,
         collectionId: productData.collectionId || undefined,
@@ -93,8 +85,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
         hasVariants: productData.hasVariants || false,
         options: productData.hasVariants ? (productData.options || []) : [],
         variants: productData.hasVariants ? (productData.variants || []) : [],
-        useProfitPercentage: productData.useProfitPercentage || false,
+        
+        profitMode: productData.profitMode || 'manual',
         profitPercentage: productData.profitPercentage || 0,
+        basePrice: productData.basePrice || 0,
+        commissionPercentage: productData.commissionPercentage || 0,
+        // Legacy support
+        useProfitPercentage: productData.profitMode === 'margin',
     };
     
     if (editingProduct) {
@@ -170,15 +167,16 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
   };
 
   const handleExportCSV = () => {
-    const headers = ['SKU', 'الاسم', 'السعر', 'التكلفة', 'الوزن', 'الكمية', 'الوصف'];
+    const headers = ['name', 'sku', 'price', 'costPrice', 'stockQuantity', 'weight', 'description', 'image_url'];
     const rows = filteredProducts.map(p => [
+        `"${p.name.replace(/"/g, '""')}"`,
         p.sku,
-        p.name,
         p.price,
         p.costPrice,
-        p.weight,
         p.stockQuantity,
-        `"${(p.description || '').replace(/"/g, '""')}"` // Escape quotes
+        p.weight,
+        `"${(p.description || '').replace(/"/g, '""').replace(/\n/g, '\\n')}"`,
+        `"${(p.images && p.images.length > 0 ? p.images.join('\n') : p.thumbnail || '').replace(/"/g, '""')}"`
     ]);
 
     const csvContent = "\uFEFF" + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
@@ -208,27 +206,28 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
                 return;
             }
 
-            const headers = rows[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-            const requiredHeaders = ['name', 'price'];
-            const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+            const headers = rows[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, '').replace(/_/g, ''));
+            
+            const headerMap: { [key: string]: number } = {};
+            const fieldMap: { [csvHeader: string]: string } = {
+                'productname': 'name', 'name': 'name',
+                'price': 'price',
+                'description': 'description',
+                'imageurl': 'image_url', 'images': 'image_url'
+            };
 
-            if (missingHeaders.length > 0) {
-                errors.push(`الأعمدة المطلوبة غير موجودة: ${missingHeaders.join(', ')}.`);
+            headers.forEach((h, index) => {
+                if (fieldMap[h]) {
+                    headerMap[fieldMap[h]] = index;
+                }
+            });
+
+            if (headerMap.name === undefined || headerMap.price === undefined) {
+                 errors.push(`الأعمدة المطلوبة (product_name, price) غير موجودة.`);
             } else {
-                const headerMap: { [key in keyof Product]?: number } = {};
-                headers.forEach((h, index) => {
-                    if (h === 'name') headerMap.name = index;
-                    if (h === 'sku') headerMap.sku = index;
-                    if (h === 'price') headerMap.price = index;
-                    if (h === 'costprice') headerMap.costPrice = index;
-                    if (h === 'stockquantity') headerMap.stockQuantity = index;
-                    if (h === 'weight') headerMap.weight = index;
-                    if (h === 'description') headerMap.description = index;
-                });
-                
                 for (let i = 1; i < rows.length; i++) {
                     const row = rows[i];
-                    const cells = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || row.split(',');
+                    const cells = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
                     const cleanCell = (val: string | undefined) => val ? val.replace(/^"|"$/g, '').trim() : '';
                     
                     const name = cleanCell(cells[headerMap.name!]);
@@ -240,15 +239,28 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
                     const price = parseFloat(priceStr);
                     if (isNaN(price)) { errors.push(`الصف ${i + 1}: السعر غير صالح.`); continue; }
 
+                    let thumbnail = '';
+                    let images: string[] = [];
+                    const imageUrlIndex = headerMap['image_url'];
+                    if (imageUrlIndex !== undefined && cells[imageUrlIndex]) {
+                        const urls = cleanCell(cells[imageUrlIndex]).split(/\r?\n/).map(u => u.trim()).filter(Boolean);
+                        if (urls.length > 0) {
+                            thumbnail = urls[0];
+                            images = urls;
+                        }
+                    }
+
                     importedProducts.push({
                         id: `imported-${Date.now()}-${i}`,
                         name,
                         price,
-                        sku: headerMap.sku !== undefined ? cleanCell(cells[headerMap.sku]) : `SKU-${Date.now()}-${i}`,
-                        costPrice: headerMap.costPrice !== undefined ? parseFloat(cleanCell(cells[headerMap.costPrice])) || 0 : 0,
-                        stockQuantity: headerMap.stockQuantity !== undefined ? parseInt(cleanCell(cells[headerMap.stockQuantity])) || 0 : 0,
-                        weight: headerMap.weight !== undefined ? parseFloat(cleanCell(cells[headerMap.weight])) || 1 : 1,
                         description: headerMap.description !== undefined ? cleanCell(cells[headerMap.description]) : '',
+                        thumbnail,
+                        images,
+                        sku: `SKU-${Date.now()}-${i}`,
+                        costPrice: 0,
+                        stockQuantity: 100, // Default stock
+                        weight: 1, // Default weight
                         hasVariants: false, options: [], variants: [], inStock: true,
                     });
                 }
@@ -285,7 +297,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
   };
   
   const handleDownloadTemplate = () => {
-    const headers = ['name', 'sku', 'price', 'costPrice', 'stockQuantity', 'weight', 'description'];
+    const headers = ['product_name', 'price', 'description', 'image_url'];
     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + headers.join(",");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -297,20 +309,23 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
   };
 
   const openAddModal = () => {
-    setNewProduct({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], thumbnail: '', hasVariants: false, options: [], variants: [], useProfitPercentage: false, profitPercentage: 0 });
+    setNewProduct({ sku: '', name: '', price: 0, weight: 1, costPrice: 0, stockQuantity: 10, collectionId: '', description: '', images: [], thumbnail: '', hasVariants: false, options: [], variants: [], profitMode: 'manual', profitPercentage: 0, basePrice: 0, commissionPercentage: 0 });
     setIsAdding(true);
   };
 
   const openEditModal = (product: Product) => {
-    setEditingProduct({
+    const productToEdit = {
         ...product,
         collectionId: product.collectionId ?? '',
         description: product.description ?? '',
         thumbnail: product.thumbnail ?? '',
         images: product.images ?? [],
-        useProfitPercentage: product.useProfitPercentage ?? false,
+        profitMode: product.profitMode || (product.useProfitPercentage ? 'margin' : 'manual'),
         profitPercentage: product.profitPercentage ?? 0,
-    });
+        basePrice: product.basePrice ?? 0,
+        commissionPercentage: product.commissionPercentage ?? 0
+    };
+    setEditingProduct(productToEdit);
   };
   
   const closeModal = () => {
@@ -361,13 +376,18 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
         </div>
       </motion.div>
 
-      {/* ... (Existing sync status messages) ... */}
+      {syncStatus.type !== 'idle' && (
+        <motion.div variants={itemVariants} className={`p-4 rounded-lg flex items-center gap-3 ${syncStatus.type === 'success' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
+          {syncStatus.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+          <span className="font-bold text-sm">{syncStatus.message}</span>
+        </motion.div>
+      )}
 
       <motion.div variants={itemVariants} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-colors relative">
          {isSyncing && (
             <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 z-20 flex flex-col items-center justify-center gap-4 backdrop-blur-sm animate-in fade-in duration-200">
                 <RefreshCw size={40} className="animate-spin text-indigo-500" />
-                <p className="font-bold text-lg text-indigo-600 dark:text-indigo-400">جاري تحديث قائمة المنتجات من Wuilt...</p>
+                <p className="font-bold text-lg text-indigo-600 dark:text-indigo-400">جاري تحديث قائمة المنتجات...</p>
                 <p className="text-sm text-slate-500">قد يستغرق هذا بضع لحظات</p>
             </div>
         )}
@@ -564,13 +584,38 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ settings, setSettings }) =>
         />
       )}
 
-      {/* ... (Post and Delete modals remain the same) ... */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-xl p-6 text-center">
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-950 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle size={32}/>
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white">حذف المنتج؟</h3>
+                <p className="text-slate-500 dark:text-slate-400 mt-2">هل أنت متأكد من حذف "{productToDelete.name}"؟ لا يمكن التراجع عن هذا الإجراء.</p>
+                <div className="flex gap-3 mt-6">
+                    <button onClick={() => setProductToDelete(null)} className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold">إلغاء</button>
+                    <button onClick={confirmDelete} className="flex-1 py-2.5 bg-red-600 text-white rounded-lg font-bold">تأكيد الحذف</button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showPostModal && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-xl p-6 relative">
+                 <button onClick={() => setShowPostModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500"><XCircle/></button>
+                 <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">منشور تسويقي مقترح</h3>
+                 <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                    {generatedPost}
+                 </div>
+                 <button onClick={() => { navigator.clipboard.writeText(generatedPost); alert('تم النسخ!'); }} className="mt-4 w-full flex items-center justify-center gap-2 bg-indigo-100 text-indigo-700 px-4 py-2 rounded-lg font-bold"><Copy size={16}/> نسخ المنشور</button>
+            </div>
+        </div>
+      )}
     </motion.div>
   );
 };
 
-
-// ... (Existing helper components)
 
 // --- New Component: ProductImportModal ---
 interface ProductImportModalProps {
@@ -595,7 +640,7 @@ const ProductImportModal: React.FC<ProductImportModalProps> = ({ isOpen, onClose
 
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
               <h3 className="text-xl font-bold dark:text-white flex items-center gap-2"><FileUp size={20} className="text-indigo-500" /> استيراد المنتجات</h3>
               <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><XCircle size={24} className="text-slate-400 dark:text-slate-600" /></button>
@@ -607,7 +652,7 @@ const ProductImportModal: React.FC<ProductImportModalProps> = ({ isOpen, onClose
                 ) : !previewData ? (
                     <div className="text-center">
                         <h4 className="font-bold text-lg text-slate-800 dark:text-white">الخطوة 1: تجهيز الملف</h4>
-                        <p className="text-sm text-slate-500 mt-1 mb-6">قم بتنزيل القالب واملأه ببيانات منتجاتك ثم ارفعه هنا.</p>
+                        <p className="text-sm text-slate-500 mt-1 mb-6">قم بتنزيل القالب واملأه ببيانات منتجاتك ثم ارفعه هنا. يمكنك الحصول على الملف من Google Sheets عبر File &gt; Download &gt; CSV.</p>
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
                             <button onClick={onDownloadTemplate} className="w-full text-center py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-bold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex items-center justify-center gap-2">
                                 <Download size={16}/> تحميل القالب (CSV)
@@ -693,15 +738,23 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (productData.useProfitPercentage) {
-            const price = productData.price || 0;
-            const percentage = productData.profitPercentage || 0;
-            const newCost = price * (1 - (percentage / 100));
-            if (newCost !== productData.costPrice) {
-                setProductData((prev: any) => ({ ...prev, costPrice: newCost }));
-            }
+        const { profitMode, price, profitPercentage, basePrice, commissionPercentage, costPrice } = productData;
+        let newCost = costPrice || 0;
+
+        if (profitMode === 'margin') {
+            const margin = profitPercentage || 0;
+            const currentPrice = price || 0;
+            newCost = currentPrice * (1 - (margin / 100));
+        } else if (profitMode === 'commission') {
+            const commission = commissionPercentage || 0;
+            const currentBasePrice = basePrice || 0;
+            newCost = currentBasePrice * (1 - (commission / 100));
         }
-    }, [productData.price, productData.profitPercentage, productData.useProfitPercentage, setProductData]);
+        
+        if (Math.abs(newCost - (costPrice || 0)) > 0.001) {
+            setProductData((prev: any) => ({ ...prev, costPrice: newCost }));
+        }
+    }, [productData.profitMode, productData.price, productData.profitPercentage, productData.basePrice, productData.commissionPercentage, productData.costPrice, setProductData]);
 
     const updateField = (field: keyof Product, value: any) => {
         setProductData((prev: Product) => ({ ...prev, [field]: value }));
@@ -757,9 +810,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
         }
     };
 
+    const profitMode = productData.profitMode || 'manual';
+
     return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between flex-shrink-0">
               <h3 className="text-xl font-bold dark:text-white">{isEditing ? 'تعديل المنتج' : 'إضافة منتج جديد'}</h3>
               <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
@@ -842,20 +897,29 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, onClose, on
                                     <FormInput label="الوزن (كجم)" icon={<Scale size={16}/>} type="number" value={productData.weight || ''} onChange={e => updateField('weight', Number(e.target.value))} />
                                 </div>
 
-                                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                                    <label className="flex items-center justify-between cursor-pointer">
-                                        <span className="font-bold text-slate-700 dark:text-slate-300">حساب الربح بالنسبة المئوية</span>
-                                        <input type="checkbox" checked={productData.useProfitPercentage} onChange={e => updateField('useProfitPercentage', e.target.checked)} className="h-5 w-5 rounded text-indigo-600 focus:ring-indigo-500" />
-                                    </label>
-                                    {productData.useProfitPercentage && (
-                                        <div className="mt-4 animate-in fade-in duration-300">
-                                            <FormInput label="نسبة الربح %" icon={<Percent size={16}/>} type="number" value={productData.profitPercentage || ''} onChange={e => updateField('profitPercentage', Number(e.target.value))} />
-                                        </div>
-                                    )}
+                                <div>
+                                    <label className="text-sm font-bold text-slate-700 dark:text-slate-400 mb-2 block">طريقة حساب التكلفة</label>
+                                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl">
+                                        <button type="button" onClick={() => updateField('profitMode', 'manual')} className={`flex-1 flex justify-center items-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${profitMode === 'manual' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600' : 'text-slate-500'}`}><Wallet size={16}/> يدوي</button>
+                                        <button type="button" onClick={() => updateField('profitMode', 'margin')} className={`flex-1 flex justify-center items-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${profitMode === 'margin' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600' : 'text-slate-500'}`}><Percent size={16}/> هامش ربح</button>
+                                        <button type="button" onClick={() => updateField('profitMode', 'commission')} className={`flex-1 flex justify-center items-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${profitMode === 'commission' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600' : 'text-slate-500'}`}><HandCoins size={16}/> عمولة</button>
+                                    </div>
                                 </div>
+                                
+                                {profitMode === 'margin' && (
+                                    <div className="animate-in fade-in duration-300">
+                                        <FormInput label="نسبة هامش الربح %" icon={<Percent size={16}/>} type="number" value={productData.profitPercentage || ''} onChange={e => updateField('profitPercentage', Number(e.target.value))} />
+                                    </div>
+                                )}
+                                {profitMode === 'commission' && (
+                                    <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-300">
+                                        <FormInput label="السعر الأساسي" icon={<DollarSign size={16}/>} type="number" value={productData.basePrice || ''} onChange={e => updateField('basePrice', Number(e.target.value))} />
+                                        <FormInput label="نسبة العمولة %" icon={<Percent size={16}/>} type="number" value={productData.commissionPercentage || ''} onChange={e => updateField('commissionPercentage', Number(e.target.value))} />
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormInput label="التكلفة (ج.م)" icon={<Wallet size={16}/>} type="number" value={productData.costPrice?.toFixed(2) || '0.00'} onChange={e => updateField('costPrice', Number(e.target.value))} disabled={productData.useProfitPercentage} readOnly={productData.useProfitPercentage} />
+                                    <FormInput label="التكلفة (ج.م)" icon={<Wallet size={16}/>} type="number" value={productData.costPrice?.toFixed(2) || '0.00'} onChange={e => updateField('costPrice', Number(e.target.value))} disabled={profitMode !== 'manual'} readOnly={profitMode !== 'manual'} />
                                     <FormInput label="الكمية" icon={<Package size={16}/>} type="number" value={productData.hasVariants ? productData.variants?.reduce((s,v)=>s+v.stockQuantity,0) : productData.stockQuantity || ''} onChange={e => updateField('stockQuantity', Number(e.target.value))} disabled={productData.hasVariants} />
                                 </div>
                             </div>

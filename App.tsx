@@ -1,12 +1,14 @@
+
 import { useState, useMemo, useEffect, useRef } from 'react';
 // FIX: The `Navigate` component was not imported, causing an error. It has been added to the import statement.
-import { HashRouter, Routes, Route, Outlet, useNavigate, useParams, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Outlet, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
 
 import { User, Store, StoreData, Order, Settings, Wallet, OrderItem, Employee, Product, PlaceOrderData } from './types';
 import * as db from './services/databaseService';
 import { supabase } from './services/supabaseClient';
 import { INITIAL_SETTINGS } from './constants';
 import GlobalSaveIndicator, { SaveStatus } from './components/GlobalSaveIndicator';
+import { oneToolzProducts } from './src/data/one-toolz-products';
 
 // Page Components (will be loaded via router)
 import SignUpPage from './components/SignUpPage';
@@ -96,6 +98,61 @@ const EmployeeLayoutWrapper = ({ children, ...props }: any) => {
     return <EmployeeLayout {...props}>{children}</EmployeeLayout>;
 };
 
+function sanitizeData(storeData: StoreData): StoreData {
+    if (!storeData) return storeData;
+
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/; // Simplified check for ISO format
+    let hasChanges = false;
+
+    const fixDate = (dateString: string): string | null => {
+        if (!dateString || typeof dateString !== 'string') return null;
+
+        // If it's already in a valid ISO-like format, do nothing.
+        if (isoDateRegex.test(dateString)) {
+            return null;
+        }
+        
+        // Attempt to parse it. This will fail for non-standard formats like the Arabic locale one.
+        const parsedDate = new Date(dateString);
+
+        // If parsing fails OR if it contains Arabic numerals (a strong sign of the old bug), it's corrupted.
+        if (isNaN(parsedDate.getTime()) || /[٠-٩]/.test(dateString)) {
+            console.warn(`Found and fixed corrupted date format: "${dateString}". Replacing with current time.`);
+            hasChanges = true;
+            // We replace it with the current time to ensure data integrity, even if the original time is lost.
+            return new Date().toISOString();
+        } else {
+            // The date was parsable but not in ISO format (e.g., "2024-01-01"). Convert it to full ISO format.
+            console.log(`Normalized date format from "${dateString}" to ISO format.`);
+            hasChanges = true;
+            return parsedDate.toISOString();
+        }
+    };
+    
+    const sanitizedTransactions = storeData.wallet?.transactions?.map(tx => {
+        const fixedDate = fixDate(tx.date);
+        return fixedDate ? { ...tx, date: fixedDate } : tx;
+    });
+
+    const sanitizedOrders = storeData.orders?.map(order => {
+        const fixedDate = fixDate(order.date);
+        return fixedDate ? { ...order, date: fixedDate } : order;
+    });
+
+    if (hasChanges) {
+        return {
+            ...storeData,
+            wallet: {
+                ...(storeData.wallet || {balance: 0, transactions: []}),
+                transactions: sanitizedTransactions || storeData.wallet?.transactions || []
+            },
+            orders: sanitizedOrders || storeData.orders || [],
+        };
+    }
+
+    return storeData;
+}
+
 export const AppComponent = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [allStoresData, setAllStoresData] = useState<Record<string, StoreData>>({});
@@ -104,7 +161,7 @@ export const AppComponent = () => {
     const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
     const [authChecked, setAuthChecked] = useState<boolean>(false);
     const [cart, setCart] = useState<OrderItem[]>([]);
-    const [isSidebarOpen, setSidebarOpen] = useState<boolean>(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
     const [isEmployeeSession, setIsEmployeeSession] = useState<boolean>(false);
     const [theme, setTheme] = useState<string>(localStorage.getItem('theme') || 'system');
     const [showCongratsModal, setShowCongratsModal] = useState<boolean>(false);
@@ -166,10 +223,12 @@ export const AppComponent = () => {
                 
                 setSaveStatus('success');
                 setSaveMessage('تم الحفظ بنجاح!');
+                setTimeout(() => setSaveStatus('idle'), 2000);
 
             } catch (e: any) {
                 setSaveStatus('error');
                 setSaveMessage(e.message || 'فشل الحفظ');
+                setTimeout(() => setSaveStatus('idle'), 3000);
             }
         }, 2500); // 2.5-second debounce period
 
@@ -234,7 +293,8 @@ export const AppComponent = () => {
                         setActiveStoreId(storeId);
                         const storeData = await db.getStoreData(storeId) as StoreData | null;
                         if (storeData) {
-                            setAllStoresData(prev => ({ ...prev, [storeId]: storeData }));
+                            const sanitizedStoreData = sanitizeData(storeData);
+                            setAllStoresData(prev => ({ ...prev, [storeId]: sanitizedStoreData }));
                         }
                     }
                 }
@@ -370,7 +430,8 @@ export const AppComponent = () => {
         if (!allStoresData[storeId]) {
             const storeData = await db.getStoreData(storeId) as StoreData | null;
             if (storeData) {
-                setAllStoresData(prev => ({ ...prev, [storeId]: storeData }));
+                const sanitizedStoreData = sanitizeData(storeData);
+                setAllStoresData(prev => ({ ...prev, [storeId]: sanitizedStoreData }));
             }
         }
     };
@@ -387,8 +448,9 @@ export const AppComponent = () => {
         if (!storeData) {
             const data = await db.getStoreData(storeId) as StoreData | null;
             if (data) {
-                setAllStoresData(prev => ({ ...prev, [storeId]: data }));
-                storeData = data;
+                const sanitizedData = sanitizeData(data);
+                setAllStoresData(prev => ({ ...prev, [storeId]: sanitizedData }));
+                storeData = sanitizedData;
             } else {
                  throw new Error("لا يمكن تحميل بيانات المتجر.");
             }
@@ -435,8 +497,9 @@ export const AppComponent = () => {
         if (!storeData) {
             const data = await db.getStoreData(storeId) as StoreData | null;
             if (data) {
-                setAllStoresData(prev => ({ ...prev, [storeId]: data }));
-                storeData = data;
+                const sanitizedData = sanitizeData(data);
+                setAllStoresData(prev => ({ ...prev, [storeId]: sanitizedData }));
+                storeData = sanitizedData;
             } else {
                  throw new Error("لا يمكن تحميل بيانات المتجر.");
             }
@@ -474,7 +537,10 @@ export const AppComponent = () => {
 
         const newStoreData: StoreData = {
             orders: [],
-            settings: INITIAL_SETTINGS,
+            settings: {
+                ...INITIAL_SETTINGS,
+                products: oneToolzProducts, // Pre-seed products for new stores
+            },
             wallet: { balance: 0, transactions: [] },
             cart: [],
             customers: [],
@@ -513,6 +579,66 @@ export const AppComponent = () => {
         completeLogin(userToImpersonate, null); 
     };
 
+    const refreshStoreData = async (storeId: string) => {
+        if (!storeId) return;
+        console.log(`[REALTIME] Refreshing data for store: ${storeId}`);
+        const storeData = await db.getStoreData(storeId) as StoreData | null;
+        if (storeData) {
+            const sanitizedStoreData = sanitizeData(storeData);
+            setAllStoresData(prev => ({ ...prev, [storeId]: sanitizedStoreData }));
+            console.log(`[REALTIME] Store ${storeId} data updated.`);
+        }
+    };
+
+    const refreshGlobalData = async () => {
+        console.log('[REALTIME] Refreshing global user data.');
+        const globalData = await db.getGlobalData();
+        if (globalData?.users) {
+            setUsers(globalData.users);
+            setCurrentUser(prevUser => {
+                if (!prevUser) return null;
+                const updatedCurrentUser = globalData.users.find(u => u.phone === prevUser.phone);
+                return updatedCurrentUser || prevUser;
+            });
+            console.log('[REALTIME] Global user data updated.');
+        }
+    };
+
+    // --- Realtime Subscriptions ---
+    useEffect(() => {
+        console.log('[REALTIME] Setting up subscriptions...');
+        
+        const handleStoreChange = (payload: any) => {
+            console.log('[REALTIME] Store data change detected:', payload);
+            const record = payload.new || payload.old;
+            const storeId = record.store_id || record.id;
+            if (storeId) {
+              refreshStoreData(storeId);
+            }
+        };
+        
+        const handleUserChange = (payload: any) => {
+            console.log('[REALTIME] User data change detected:', payload);
+            refreshGlobalData();
+        };
+
+        const subscriptions = [
+          supabase.channel('public:orders').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, handleStoreChange).subscribe(),
+          supabase.channel('public:stores_data').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'stores_data' }, handleStoreChange).subscribe(),
+          supabase.channel('public:products').on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, handleStoreChange).subscribe(),
+          supabase.channel('public:transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, handleStoreChange).subscribe(),
+          supabase.channel('public:employees').on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, handleStoreChange).subscribe(),
+          supabase.channel('public:collections').on('postgres_changes', { event: '*', schema: 'public', table: 'collections' }, handleStoreChange).subscribe(),
+          supabase.channel('public:custom_pages').on('postgres_changes', { event: '*', schema: 'public', table: 'custom_pages' }, handleStoreChange).subscribe(),
+          supabase.channel('public:users').on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, handleUserChange).subscribe()
+        ];
+
+        return () => {
+            console.log('[REALTIME] Removing subscriptions.');
+            subscriptions.forEach(sub => supabase.removeChannel(sub));
+        };
+    }, []);
+
     if (!authChecked) {
         return <GlobalLoader />;
     }
@@ -535,23 +661,25 @@ export const AppComponent = () => {
         cart,
         setOrders: (updater: any) => {
             if(activeStoreId) {
-                setAllStoresData(p => ({...p, [activeStoreId]: {...p[activeStoreId], orders: typeof updater === 'function' ? updater(p[activeStoreId].orders) : updater }}))
+                setAllStoresData(p => ({...p, [activeStoreId]: { ...(p[activeStoreId] || {}), orders: typeof updater === 'function' ? updater(p[activeStoreId]?.orders || []) : updater }}))
             }
         },
         setSettings: (updater: any) => {
             if(activeStoreId) {
-                setAllStoresData(p => ({...p, [activeStoreId]: {...p[activeStoreId], settings: typeof updater === 'function' ? updater(p[activeStoreId].settings) : updater }}))
+                setAllStoresData(p => ({...p, [activeStoreId]: { ...(p[activeStoreId] || {}), settings: typeof updater === 'function' ? updater(p[activeStoreId]?.settings || INITIAL_SETTINGS) : updater }}))
             }
         },
         setWallet: (updater: any) => {
              if(activeStoreId) {
-                setAllStoresData(p => ({...p, [activeStoreId]: {...p[activeStoreId], wallet: typeof updater === 'function' ? updater(p[activeStoreId].wallet) : updater }}))
+                setAllStoresData(p => ({...p, [activeStoreId]: { ...(p[activeStoreId] || {}), wallet: typeof updater === 'function' ? updater(p[activeStoreId]?.wallet || { balance: 0, transactions: [] }) : updater }}))
             }
         },
     };
     
     // This component acts as a guard for owner routes.
     const OwnerLayoutWrapper = () => {
+        const location = useLocation();
+    
         useEffect(() => {
             if (!welcomeScreenShown) {
                 const timer = setTimeout(() => {
@@ -560,19 +688,35 @@ export const AppComponent = () => {
                 return () => clearTimeout(timer);
             }
         }, [welcomeScreenShown]);
-
+    
         if (isEmployeeSession) {
             return <Navigate to="/employee/dashboard" replace />;
         }
         if (!currentUser) {
             return <Navigate to="/owner-login" replace />;
         }
-        
+    
+        const hasNoStores = !currentUser.stores || currentUser.stores.length === 0;
+    
+        if (hasNoStores && !currentUser.isAdmin) {
+            if (location.pathname !== '/create-store') {
+                return <Navigate to="/create-store" replace />;
+            }
+            return (
+                <div className="bg-slate-50 dark:bg-gradient-to-b dark:from-slate-950 dark:to-[#111827] text-slate-800 dark:text-slate-200 min-h-screen" dir="rtl">
+                    <Header currentUser={currentUser} onLogout={handleLogout} onToggleSidebar={() => {}} theme={theme} setTheme={setTheme} />
+                    <main className="flex-1 p-4 md:p-6">
+                        <Outlet />
+                    </main>
+                </div>
+            );
+        }
+    
         if (!welcomeScreenShown) {
             return <WelcomeLoader userName={currentUser?.fullName.split(' ')[0] || ''} />;
         }
-
-        return <MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme} />;
+    
+        return <MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setIsSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme} />;
     };
     
     // This component handles redirection for any undefined routes.
@@ -618,13 +762,13 @@ export const AppComponent = () => {
                 }>
                     <Route index element={<EmployeeDashboardPage currentUser={currentUser} orders={pageProps.orders} />} />
                     <Route path="dashboard" element={<EmployeeDashboardPage currentUser={currentUser} orders={pageProps.orders} />} />
-                    <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} />} />
+                    <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} activeStore={pageProps.activeStore} />} />
                     <Route path="account-settings" element={<EmployeeAccountSettingsPage currentUser={currentUser} setCurrentUser={setCurrentUser} users={users} setUsers={setUsers} />} />
                 </Route>
 
                 <Route path="/" element={<OwnerLayoutWrapper />}>
                     <Route index element={<Dashboard {...pageProps} />} />
-                    <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} />} />
+                    <Route path="confirmation-queue" element={<ConfirmationQueuePage currentUser={currentUser} orders={pageProps.orders} setOrders={pageProps.setOrders} settings={pageProps.settings} activeStore={pageProps.activeStore} />} />
                     <Route path="orders" element={<OrdersList {...pageProps} addLoyaltyPointsForOrder={() => {}} />} />
                     <Route path="products" element={<ProductsPage {...pageProps} />} />
                     <Route path="customers" element={<CustomersPage orders={pageProps.orders} loyaltyData={{}} updateCustomerLoyaltyPoints={() => {}} />} />

@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Store, Mail, User as UserIcon, ShieldAlert, Phone, KeyRound, LogIn, UserPlus, Loader2, X, BarChart, Settings, Users, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -101,6 +98,11 @@ const SignUpPage: React.FC<SignUpPageProps> = ({ onPasswordSuccess, users, setUs
     if (isLoginView) {
       const foundUser = users.find(user => user.phone === userPhone && user.password === userPassword);
       if (foundUser) {
+        if (!Array.isArray(foundUser.stores) && !foundUser.isAdmin) {
+          setUserError('أنت مسجل كموظف. يرجى تسجيل الدخول من صفحة دخول الموظفين.');
+          setIsLoading(false);
+          return;
+        }
         onPasswordSuccess(foundUser);
       } else {
         setUserError('رقم الموبايل أو كلمة المرور غير صحيحة.');

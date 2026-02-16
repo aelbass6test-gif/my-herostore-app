@@ -293,8 +293,16 @@ create policy "Public Access Chat" on public.chat_messages for all using (true) 
 -- Grant permissions to roles
 grant all on all tables in schema public to anon, authenticated, service_role;
 
--- Enable Realtime for Chat
+-- Enable Realtime for Chat AND OTHER CRITICAL TABLES
 alter publication supabase_realtime add table public.chat_messages;
+alter publication supabase_realtime add table public.users;
+alter publication supabase_realtime add table public.stores_data;
+alter publication supabase_realtime add table public.products;
+alter publication supabase_realtime add table public.orders;
+alter publication supabase_realtime add table public.transactions;
+alter publication supabase_realtime add table public.employees;
+alter publication supabase_realtime add table public.collections;
+alter publication supabase_realtime add table public.custom_pages;
 
 -- Reload Schema Cache for PostgREST
 NOTIFY pgrst, 'reload schema';

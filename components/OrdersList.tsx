@@ -320,18 +320,18 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
     const useCustom = compFees?.useCustomFees ?? false;
     
     if ((newStatus === 'تم_الارسال' || newStatus === 'قيد_الشحن') && !updatedOrderData.shippingAndInsuranceDeducted) {
-        newTransactions.push({ id: `ship_${orderToUpdate.id}`, type: 'سحب', amount: orderToUpdate.shippingFee, date: new Date().toLocaleString('ar-EG'), note: `خصم مصاريف شحن أوردر #${orderToUpdate.orderNumber}`, category: 'shipping' });
+        newTransactions.push({ id: `ship_${orderToUpdate.id}`, type: 'سحب', amount: orderToUpdate.shippingFee, date: new Date().toISOString(), note: `خصم مصاريف شحن أوردر #${orderToUpdate.orderNumber}`, category: 'shipping' });
         
         const insuranceRate = useCustom ? compFees!.insuranceFeePercent : (settings.enableInsurance ? settings.insuranceFeePercent : 0);
         if (orderToUpdate.isInsured && insuranceRate > 0) {
             const insuranceFee = ((orderToUpdate.productPrice + orderToUpdate.shippingFee) * insuranceRate) / 100;
-            newTransactions.push({ id: `insure_${orderToUpdate.id}`, type: 'سحب', amount: insuranceFee, date: new Date().toLocaleString('ar-EG'), note: `خصم رسوم تأمين أوردر #${orderToUpdate.orderNumber}`, category: 'insurance' });
+            newTransactions.push({ id: `insure_${orderToUpdate.id}`, type: 'سحب', amount: insuranceFee, date: new Date().toISOString(), note: `خصم رسوم تأمين أوردر #${orderToUpdate.orderNumber}`, category: 'insurance' });
         }
 
         if (orderToUpdate.includeInspectionFee && !updatedOrderData.inspectionFeeDeducted) {
             const feeAmount = useCustom ? compFees!.inspectionFee : (settings.enableInspection ? settings.inspectionFee : 0);
             if (feeAmount > 0) {
-                newTransactions.push({ id: `insp_${orderToUpdate.id}`, type: 'سحب', amount: feeAmount, date: new Date().toLocaleString('ar-EG'), note: `خصم رسوم معاينة أوردر #${orderToUpdate.orderNumber}`, category: 'inspection' });
+                newTransactions.push({ id: `insp_${orderToUpdate.id}`, type: 'سحب', amount: feeAmount, date: new Date().toISOString(), note: `خصم رسوم معاينة أوردر #${orderToUpdate.orderNumber}`, category: 'inspection' });
                 updatedOrderData.inspectionFeeDeducted = true;
             }
         }
@@ -343,7 +343,7 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
         if (applyReturnFee) {
             const returnFeeAmount = useCustom ? compFees!.returnShippingFee : settings.returnShippingFee;
             if (returnFeeAmount > 0) {
-                newTransactions.push({ id: `return_${orderToUpdate.id}`, type: 'سحب', amount: returnFeeAmount, date: new Date().toLocaleString('ar-EG'), note: `خصم مصاريف مرتجع أوردر #${orderToUpdate.orderNumber}`, category: 'return' });
+                newTransactions.push({ id: `return_${orderToUpdate.id}`, type: 'سحب', amount: returnFeeAmount, date: new Date().toISOString(), note: `خصم مصاريف مرتجع أوردر #${orderToUpdate.orderNumber}`, category: 'return' });
                 updatedOrderData.returnFeeDeducted = true;
             }
         }
@@ -396,11 +396,11 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
     const baseAmountToCollect = order.totalAmountOverride ?? (order.productPrice + order.shippingFee - order.discount);
     const totalCollected = baseAmountToCollect + (customerPaidInspection ? inspectionFee : 0);
     
-    newTransactions.push({ id: `collect_${order.id}`, type: 'إيداع', amount: totalCollected, date: new Date().toLocaleString('ar-EG'), note: `إيداع مبلغ تحصيل أوردر #${order.orderNumber}`, category: 'collection' });
+    newTransactions.push({ id: `collect_${order.id}`, type: 'إيداع', amount: totalCollected, date: new Date().toISOString(), note: `إيداع مبلغ تحصيل أوردر #${order.orderNumber}`, category: 'collection' });
 
     const codFee = calculateCodFee(order, settings);
     if (codFee > 0) {
-        newTransactions.push({ id: `cod_${order.id}`, type: 'سحب', amount: codFee, date: new Date().toLocaleString('ar-EG'), note: `خصم رسوم COD أوردر #${order.orderNumber}`, category: 'cod' });
+        newTransactions.push({ id: `cod_${order.id}`, type: 'سحب', amount: codFee, date: new Date().toISOString(), note: `خصم رسوم COD أوردر #${order.orderNumber}`, category: 'cod' });
     }
     
     const updatedOrderData = { ...order, status: 'تم_التحصيل' as OrderStatus, paymentStatus: 'مدفوع' as PaymentStatus, inspectionFeePaidByCustomer: customerPaidInspection, collectionProcessed: true };
@@ -443,14 +443,14 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders, setOrders, settings, se
             }
             
             confirmationMessage += `سيتم إرجاع مبلغ (${returnAmount.toLocaleString()} ج.م) للعميل وخصمه من المحفظة.${inspectionFeeMessage}`;
-            transactions.push({ id: `post_return_refund_${order.id}`, type: 'سحب', amount: returnAmount, date: new Date().toLocaleString('ar-EG'), note: `إرجاع مبلغ للعميل بعد استلام الطلب #${order.orderNumber}`, category: 'return' });
+            transactions.push({ id: `post_return_refund_${order.id}`, type: 'سحب', amount: returnAmount, date: new Date().toISOString(), note: `إرجاع مبلغ للعميل بعد استلام الطلب #${order.orderNumber}`, category: 'return' });
         } else {
             confirmationMessage += `لن يتم خصم قيمة المنتج من المحفظة حسب سياسة الشركة.`;
         }
 
         if (returnShippingFee > 0) {
             confirmationMessage += `\nسيتم خصم مصاريف شحن المرتجع (${returnShippingFee} ج.م).`;
-            transactions.push({ id: `post_return_fee_${order.id}`, type: 'سحب', amount: returnShippingFee, date: new Date().toLocaleString('ar-EG'), note: `مصاريف شحن مرتجع بعد الاستلام للطلب #${order.orderNumber}`, category: 'return' });
+            transactions.push({ id: `post_return_fee_${order.id}`, type: 'سحب', amount: returnShippingFee, date: new Date().toISOString(), note: `مصاريف شحن مرتجع بعد الاستلام للطلب #${order.orderNumber}`, category: 'return' });
         }
 
         if (!window.confirm(confirmationMessage)) return;
