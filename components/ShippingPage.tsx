@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, ShippingOption, CompanyFees } from '../types';
-import { Save, Info, Truck, Plus, Trash2, Wallet, Scale, AlertCircle, XCircle, Package, RefreshCcw, Percent, Coins, Building2, MapPin, Repeat, Settings as SettingsIcon, ShieldCheck, Banknote, ChevronDown, ChevronUp, Eye, ArrowRight, Link2, Plug, CheckCircle2, Wrench, ArrowLeft } from 'lucide-react';
+import { Settings, ShippingOption, CompanyFees, CityOption } from '../types';
+import { Save, Info, Truck, Plus, Trash2, Wallet, Scale, AlertCircle, XCircle, Package, RefreshCcw, Percent, Coins, Building2, MapPin, Repeat, Settings as SettingsIcon, ShieldCheck, Banknote, ChevronDown, ChevronUp, Eye, ArrowRight, Link2, Plug, CheckCircle2, Wrench, ArrowLeft, Map, Link as LinkIcon, Download, ListChecks, CheckSquare, Square } from 'lucide-react';
 import SaveBar from './SaveBar';
 import { motion } from 'framer-motion';
+import { generateEgyptShippingOptions, EGYPT_GOVERNORATES } from '../constants';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -55,6 +56,116 @@ const PolicyToggle: React.FC<{ label: string; description?: string; active: bool
         </div>
     </div>
 );
+
+const CityManagerModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    zone: ShippingOption; 
+    onSave: (cities: CityOption[]) => void 
+}> = ({ isOpen, onClose, zone, onSave }) => {
+    const [selectedCities, setSelectedCities] = useState<string[]>([]);
+    
+    // Find standard cities for this governorate
+    const standardCities = EGYPT_GOVERNORATES.find(g => g.name === zone.label)?.cities || [];
+    
+    // On open, sync selected cities with current zone cities
+    useEffect(() => {
+        if (isOpen) {
+            const currentNames = (zone.cities || []).map(c => c.name);
+            setSelectedCities(currentNames);
+        }
+    }, [isOpen, zone]);
+
+    if (!isOpen) return null;
+
+    const toggleCity = (cityName: string) => {
+        setSelectedCities(prev => 
+            prev.includes(cityName) 
+                ? prev.filter(c => c !== cityName) 
+                : [...prev, cityName]
+        );
+    };
+
+    const toggleAll = () => {
+        if (selectedCities.length === standardCities.length) {
+            setSelectedCities([]);
+        } else {
+            setSelectedCities(standardCities);
+        }
+    };
+
+    const handleSave = () => {
+        const newCities: CityOption[] = [];
+        
+        // Loop through selected city names
+        selectedCities.forEach(name => {
+            // Check if city already existed in zone to preserve its data
+            const existingCity = (zone.cities || []).find(c => c.name === name);
+            if (existingCity) {
+                newCities.push(existingCity);
+            } else {
+                // Create new city entry linked to parent fees
+                newCities.push({
+                    id: `city_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                    name: name,
+                    shippingPrice: zone.price,
+                    extraKgPrice: zone.extraKgPrice,
+                    returnAfterPrice: zone.returnAfterPrice,
+                    returnWithoutPrice: zone.returnWithoutPrice,
+                    exchangePrice: zone.exchangePrice,
+                    useParentFees: true
+                });
+            }
+        });
+        
+        onSave(newCities);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-slate-900/70 dark:bg-black/90 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl p-6 text-right flex flex-col max-h-[85vh] border border-slate-300 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
+                        <MapPin className="text-indigo-600"/> تحديد مدن {zone.label}
+                    </h3>
+                    <button onClick={onClose}><XCircle className="text-slate-400 hover:text-red-500"/></button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-2">
+                    {standardCities.length === 0 ? (
+                        <p className="text-center text-slate-500 py-8">لا توجد بيانات مدن افتراضية لهذه المحافظة. يمكنك إضافة مدن يدوياً.</p>
+                    ) : (
+                        <>
+                            <button onClick={toggleAll} className="mb-4 text-sm font-bold text-indigo-600 hover:underline">
+                                {selectedCities.length === standardCities.length ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+                            </button>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {standardCities.map(city => {
+                                    const isSelected = selectedCities.includes(city);
+                                    return (
+                                        <div 
+                                            key={city} 
+                                            onClick={() => toggleCity(city)}
+                                            className={`p-3 rounded-xl border flex items-center gap-2 cursor-pointer transition-all ${isSelected ? 'bg-indigo-50 border-indigo-500 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'}`}
+                                        >
+                                            {isSelected ? <CheckSquare size={18} className="text-indigo-600 dark:text-indigo-400"/> : <Square size={18} className="text-slate-400"/>}
+                                            <span className="text-sm font-bold">{city}</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-6 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">إلغاء</button>
+                    <button onClick={handleSave} className="px-6 py-2.5 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-lg active:scale-95">حفظ التغييرات</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 
 const ShippingPage: React.FC<{ settings: Settings, setSettings: React.Dispatch<React.SetStateAction<Settings>> }> = ({ settings, setSettings }) => {
@@ -265,8 +376,33 @@ const CompanyManager: React.FC<any> = ({ companyName, settings, setSettings, onB
 // ... (Rest of components remain the same, just receiving `setSettings` which is actually `setLocalSettings`)
 const ZonesEditor: React.FC<any> = ({ companyName, settings, setSettings }) => {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [expandedZoneId, setExpandedZoneId] = useState<string | null>(null);
+  const [managingZoneId, setManagingZoneId] = useState<string | null>(null);
+  
+  const [newCityName, setNewCityName] = useState('');
+  const [newCityPrice, setNewCityPrice] = useState('');
+  const [newCityExtraKg, setNewCityExtraKg] = useState('');
+  const [newCityReturnAfter, setNewCityReturnAfter] = useState('');
+  const [newCityReturnWithout, setNewCityReturnWithout] = useState('');
+  const [newCityExchange, setNewCityExchange] = useState('');
+  const [newCityUseParent, setNewCityUseParent] = useState(true);
+
+  // When expanding a zone, we want to auto-fill the inputs with parent values if "Link" is checked
+  useEffect(() => {
+      if (expandedZoneId && newCityUseParent) {
+          const zone = settings.shippingOptions[companyName]?.find((z: any) => z.id === expandedZoneId);
+          if (zone) {
+              setNewCityPrice(zone.price);
+              setNewCityExtraKg(zone.extraKgPrice);
+              setNewCityReturnAfter(zone.returnAfterPrice);
+              setNewCityReturnWithout(zone.returnWithoutPrice);
+              setNewCityExchange(zone.exchangePrice);
+          }
+      }
+  }, [expandedZoneId, newCityUseParent, settings.shippingOptions, companyName]);
+
   const addShippingOption = () => {
-    const newOption: ShippingOption = { id: Date.now().toString(), label: 'منطقة جديدة', details: 'تفاصيل المنطقة...', price: 50, baseWeight: 5, extraKgPrice: 10, returnAfterPrice: 50, returnWithoutPrice: 50, exchangePrice: 70 };
+    const newOption: ShippingOption = { id: Date.now().toString(), label: 'منطقة جديدة', details: 'تفاصيل المنطقة...', price: 50, baseWeight: 5, extraKgPrice: 10, returnAfterPrice: 50, returnWithoutPrice: 50, exchangePrice: 70, cities: [] };
     setSettings((prev: Settings) => ({ ...prev, shippingOptions: { ...prev.shippingOptions, [companyName]: [...(prev.shippingOptions[companyName] || []), newOption] } }));
   };
   const updateShippingOption = (id: string, field: keyof ShippingOption, value: string | number) => {
@@ -277,42 +413,236 @@ const ZonesEditor: React.FC<any> = ({ companyName, settings, setSettings }) => {
     setSettings((prev: Settings) => ({ ...prev, shippingOptions: { ...prev.shippingOptions, [companyName]: (prev.shippingOptions[companyName] || []).filter(opt => opt.id !== confirmDelete) } }));
     setConfirmDelete(null);
   };
+
+  const addCity = (zoneId: string) => {
+      if (!newCityName || (!newCityUseParent && !newCityPrice)) return;
+      const zone = settings.shippingOptions[companyName]?.find((z: any) => z.id === zoneId);
+      
+      const newCity: CityOption = {
+          id: Date.now().toString(),
+          name: newCityName,
+          shippingPrice: newCityUseParent ? (zone?.price || 0) : Number(newCityPrice),
+          extraKgPrice: newCityUseParent ? (zone?.extraKgPrice || 0) : Number(newCityExtraKg) || 0,
+          returnAfterPrice: newCityUseParent ? (zone?.returnAfterPrice || 0) : Number(newCityReturnAfter) || 0,
+          returnWithoutPrice: newCityUseParent ? (zone?.returnWithoutPrice || 0) : Number(newCityReturnWithout) || 0,
+          exchangePrice: newCityUseParent ? (zone?.exchangePrice || 0) : Number(newCityExchange) || 0,
+          useParentFees: newCityUseParent
+      };
+      
+      setSettings((prev: Settings) => ({
+          ...prev,
+          shippingOptions: {
+              ...prev.shippingOptions,
+              [companyName]: (prev.shippingOptions[companyName] || []).map(opt => {
+                  if (opt.id === zoneId) {
+                      return { ...opt, cities: [...(opt.cities || []), newCity] };
+                  }
+                  return opt;
+              })
+          }
+      }));
+      setNewCityName('');
+      // Keep price fields populated if linked, otherwise reset or keep as is? Reset for UX.
+      if (!newCityUseParent) {
+          setNewCityPrice('');
+          setNewCityExtraKg('');
+          setNewCityReturnAfter('');
+          setNewCityReturnWithout('');
+          setNewCityExchange('');
+      }
+  };
+
+  const removeCity = (zoneId: string, cityId: string) => {
+      setSettings((prev: Settings) => ({
+          ...prev,
+          shippingOptions: {
+              ...prev.shippingOptions,
+              [companyName]: (prev.shippingOptions[companyName] || []).map(opt => {
+                  if (opt.id === zoneId) {
+                      return { ...opt, cities: (opt.cities || []).filter(c => c.id !== cityId) };
+                  }
+                  return opt;
+              })
+          }
+      }));
+  };
+
+  const toggleExpand = (id: string) => {
+      if (expandedZoneId === id) {
+          setExpandedZoneId(null);
+      } else {
+          setExpandedZoneId(id);
+          // Reset linked state to true when opening a new zone for convenience
+          setNewCityUseParent(true);
+      }
+  };
+
+  const loadEgyptData = () => {
+    if (confirm('سيتم إضافة جميع محافظات ومدن مصر إلى هذه الشركة. هل تريد المتابعة؟')) {
+        const egyptZones = generateEgyptShippingOptions();
+        setSettings((prev: Settings) => ({
+            ...prev,
+            shippingOptions: {
+                ...(prev.shippingOptions || {}),
+                [companyName]: egyptZones
+            }
+        }));
+        alert('تم استيراد محافظات مصر بنجاح!');
+    }
+  }
+
+  const handleUpdateZoneCities = (newCities: CityOption[]) => {
+      if (!managingZoneId) return;
+      setSettings((prev: Settings) => ({
+          ...prev,
+          shippingOptions: {
+              ...prev.shippingOptions,
+              [companyName]: (prev.shippingOptions[companyName] || []).map(opt => {
+                  if (opt.id === managingZoneId) {
+                      return { ...opt, cities: newCities };
+                  }
+                  return opt;
+              })
+          }
+      }));
+      setManagingZoneId(null);
+  };
+
   const companyFees = settings.companySpecificFees[companyName];
   const showExchange = companyFees?.useCustomFees ? companyFees.enableExchange : settings.enableExchangePrice;
   const showReturnAfter = companyFees?.useCustomFees ? companyFees.enableReturnAfter : settings.enableReturnAfterPrice;
   const showReturnWithout = companyFees?.useCustomFees ? companyFees.enableReturnWithout : settings.enableReturnWithoutPrice;
 
+  const managingZone = settings.shippingOptions[companyName]?.find(z => z.id === managingZoneId);
+
   return (
-    <SectionCard title="جدول تسعير المناطق" icon={<MapPin size={22} />} action={<button onClick={addShippingOption} className="flex items-center gap-2 text-xs bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm"><Plus size={16} /> إضافة منطقة</button>}>
+    <SectionCard title="جدول تسعير المناطق" icon={<MapPin size={22} />} action={<div className="flex gap-2"><button onClick={loadEgyptData} className="flex items-center gap-2 text-xs bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-4 py-2 rounded-lg font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"><Download size={16} /> استيراد محافظات مصر</button><button onClick={addShippingOption} className="flex items-center gap-2 text-xs bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-sm"><Plus size={16} /> إضافة منطقة</button></div>}>
       <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
         <table className="w-full text-sm">
           <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-xs uppercase">
             <tr>
-              <th className="p-3 text-right">المنطقة</th>
+              <th className="p-3 text-right">المنطقة / المحافظة</th>
               <th className="p-3 text-center">الشحن</th>
               <th className="p-3 text-center">زيادة كجم</th>
               {showReturnAfter && <th className="p-3 text-center">إرجاع بعد</th>}
               {showReturnWithout && <th className="p-3 text-center">إرجاع بدون</th>}
               {showExchange && <th className="p-3 text-center">استبدال</th>}
+              <th className="p-3 text-center">المدن</th>
               <th className="p-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-            {(settings.shippingOptions[companyName] || []).map((opt: any) => (
-              <tr key={opt.id}>
-                <td className="p-2 w-48"><input type="text" className="w-full bg-slate-50 dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.label} onChange={(e) => updateShippingOption(opt.id, 'label', e.target.value)} /></td>
-                <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.price} onChange={(e) => updateShippingOption(opt.id, 'price', Number(e.target.value))} /></td>
-                <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.extraKgPrice} onChange={(e) => updateShippingOption(opt.id, 'extraKgPrice', Number(e.target.value))} /></td>
-                {showReturnAfter && <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.returnAfterPrice} onChange={(e) => updateShippingOption(opt.id, 'returnAfterPrice', Number(e.target.value))} /></td>}
-                {showReturnWithout && <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.returnWithoutPrice} onChange={(e) => updateShippingOption(opt.id, 'returnWithoutPrice', Number(e.target.value))} /></td>}
-                {showExchange && <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.exchangePrice} onChange={(e) => updateShippingOption(opt.id, 'exchangePrice', Number(e.target.value))} /></td>}
-                <td className="p-2"><button onClick={() => setConfirmDelete(opt.id)} className="p-2 text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></td>
-              </tr>
+            {(settings.shippingOptions[companyName] || []).map((opt: ShippingOption) => (
+              <React.Fragment key={opt.id}>
+                  <tr>
+                    <td className="p-2 w-48"><input type="text" className="w-full bg-slate-50 dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.label} onChange={(e) => updateShippingOption(opt.id, 'label', e.target.value)} /></td>
+                    <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.price} onChange={(e) => updateShippingOption(opt.id, 'price', Number(e.target.value))} /></td>
+                    <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.extraKgPrice} onChange={(e) => updateShippingOption(opt.id, 'extraKgPrice', Number(e.target.value))} /></td>
+                    {showReturnAfter && <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.returnAfterPrice} onChange={(e) => updateShippingOption(opt.id, 'returnAfterPrice', Number(e.target.value))} /></td>}
+                    {showReturnWithout && <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.returnWithoutPrice} onChange={(e) => updateShippingOption(opt.id, 'returnWithoutPrice', Number(e.target.value))} /></td>}
+                    {showExchange && <td className="p-2"><input type="number" className="w-20 text-center bg-white dark:bg-slate-800 px-2 py-2 border border-slate-200 dark:border-slate-700 rounded-md font-bold text-slate-900 dark:text-white" value={opt.exchangePrice} onChange={(e) => updateShippingOption(opt.id, 'exchangePrice', Number(e.target.value))} /></td>}
+                    <td className="p-2 text-center">
+                        <button onClick={() => toggleExpand(opt.id)} className={`p-2 rounded-lg transition-colors ${expandedZoneId === opt.id ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                            <Map size={16} />
+                        </button>
+                    </td>
+                    <td className="p-2"><button onClick={() => setConfirmDelete(opt.id)} className="p-2 text-slate-400 hover:text-red-500"><Trash2 size={16} /></button></td>
+                  </tr>
+                  
+                  {expandedZoneId === opt.id && (
+                      <tr>
+                          <td colSpan={10} className="p-0">
+                              <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-y border-indigo-100 dark:border-slate-700">
+                                  <div className="max-w-4xl mx-auto">
+                                      <div className="flex justify-between items-center mb-3">
+                                          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                              <Map size={14} className="text-indigo-500"/>
+                                              المدن التابعة لـ {opt.label}
+                                          </h4>
+                                          <button onClick={() => setManagingZoneId(opt.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 rounded-lg transition-colors">
+                                              <ListChecks size={14}/> تحديد المدن المتاحة
+                                          </button>
+                                      </div>
+                                      
+                                      <div className="space-y-2 mb-4">
+                                          {opt.cities && opt.cities.length > 0 ? (
+                                              opt.cities.map(city => {
+                                                  // Determine prices to display based on whether city is linked to parent
+                                                  const isLinked = city.useParentFees;
+                                                  const displayShipping = isLinked ? opt.price : city.shippingPrice;
+                                                  const displayExtra = isLinked ? opt.extraKgPrice : city.extraKgPrice;
+                                                  const displayReturnAfter = isLinked ? opt.returnAfterPrice : city.returnAfterPrice;
+                                                  const displayReturnWithout = isLinked ? opt.returnWithoutPrice : city.returnWithoutPrice;
+                                                  const displayExchange = isLinked ? opt.exchangePrice : city.exchangePrice;
+
+                                                  return (
+                                                  <div key={city.id} className="flex items-center gap-3 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm group">
+                                                      <span className="flex-1 font-bold text-slate-700 dark:text-slate-200 px-2 flex items-center gap-2">
+                                                          {city.name}
+                                                          {isLinked && <span title="مرتبط بسعر المنطقة"><LinkIcon size={12} className="text-indigo-500" /></span>}
+                                                      </span>
+                                                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px] text-center">
+                                                          <div className={`px-2 py-1 rounded font-bold ${isLinked ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>شحن: {displayShipping}</div>
+                                                          <div className={`px-2 py-1 rounded ${isLinked ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>ك.ز: {displayExtra}</div>
+                                                          <div className={`px-2 py-1 rounded ${isLinked ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>إرجاع(م): {displayReturnAfter}</div>
+                                                          <div className={`px-2 py-1 rounded ${isLinked ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>إرجاع(ب): {displayReturnWithout}</div>
+                                                          <div className={`px-2 py-1 rounded ${isLinked ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>استبدال: {displayExchange}</div>
+                                                      </div>
+                                                      <button onClick={() => removeCity(opt.id, city.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded">
+                                                          <XCircle size={14}/>
+                                                      </button>
+                                                  </div>
+                                              )})
+                                          ) : (
+                                              <p className="text-xs text-slate-400 italic text-center py-2">لا توجد مدن مضافة لهذه المنطقة.</p>
+                                          )}
+                                      </div>
+
+                                      <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                                          <div className="flex items-center gap-2 mb-2">
+                                              <button 
+                                                  type="button"
+                                                  onClick={() => setNewCityUseParent(!newCityUseParent)}
+                                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${newCityUseParent ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
+                                              >
+                                                  <LinkIcon size={12} />
+                                                  {newCityUseParent ? 'مرتبط بأسعار المنطقة' : 'تخصيص الأسعار يدوياً'}
+                                              </button>
+                                          </div>
+                                          <div className="grid grid-cols-1 md:grid-cols-7 gap-2 items-center">
+                                              <input 
+                                                  type="text" 
+                                                  placeholder="اسم المدينة" 
+                                                  className="md:col-span-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500"
+                                                  value={newCityName}
+                                                  onChange={(e) => setNewCityName(e.target.value)}
+                                              />
+                                              <input type="number" disabled={newCityUseParent} placeholder="شحن" className="px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800" value={newCityPrice} onChange={(e) => setNewCityPrice(e.target.value)} />
+                                              <input type="number" disabled={newCityUseParent} placeholder="ك.زائد" className="px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800" value={newCityExtraKg} onChange={(e) => setNewCityExtraKg(e.target.value)} />
+                                              <input type="number" disabled={newCityUseParent} placeholder="إرجاع(م)" className="px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800" value={newCityReturnAfter} onChange={(e) => setNewCityReturnAfter(e.target.value)} />
+                                              <input type="number" disabled={newCityUseParent} placeholder="إرجاع(ب)" className="px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800" value={newCityReturnWithout} onChange={(e) => setNewCityReturnWithout(e.target.value)} />
+                                              <input type="number" disabled={newCityUseParent} placeholder="استبدال" className="px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800" value={newCityExchange} onChange={(e) => setNewCityExchange(e.target.value)} />
+                                          </div>
+                                          <button 
+                                              onClick={() => addCity(opt.id)} 
+                                              disabled={!newCityName || (!newCityUseParent && !newCityPrice)}
+                                              className="w-full mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                                          >
+                                              إضافة مدينة
+                                          </button>
+                                      </div>
+                                  </div>
+                              </div>
+                          </td>
+                      </tr>
+                  )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
       </div>
       {confirmDelete && <DeleteConfirmModal title="حذف المنطقة؟" desc="هل أنت متأكد من حذف هذه المنطقة؟" onConfirm={removeShippingOption} onCancel={() => setConfirmDelete(null)} />}
+      {managingZone && <CityManagerModal isOpen={!!managingZoneId} onClose={() => setManagingZoneId(null)} zone={managingZone} onSave={handleUpdateZoneCities} />}
     </SectionCard>
   );
 };
