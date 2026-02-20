@@ -1,10 +1,4 @@
-
-
-
-
-
 import { useState, useMemo, useEffect, useRef } from 'react';
-// FIX: The `Navigate` component was not imported, causing an error. It has been added to the import statement.
 import { HashRouter, Routes, Route, Outlet, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
 
 import { User, Store, StoreData, Order, Settings, Wallet, OrderItem, Employee, Product, PlaceOrderData } from './types';
@@ -41,7 +35,6 @@ import ProductOptionsPage from './components/ProductOptionsPage';
 import ExpensesPage from './components/ExpensesPage';
 import MarketingPage from './components/MarketingPage';
 import AnalyticsPage from './components/AnalyticsPage';
-// FIX: AdminPage is a default export, so it should be imported as such.
 import AdminPage from './components/AdminPage';
 import EmployeeLayout from './components/EmployeeLayout';
 import EmployeeDashboardPage from './components/EmployeeDashboardPage';
@@ -74,8 +67,7 @@ interface EmployeeRegisterRequestData {
   email: string;
 }
 
-// FIX: This component was defined after its usage in the routes array, causing an error.
-// It has been converted to a React component and is now defined before use.
+// ✅ FIX: تعريف المكونات قبل استخدامها في الـ Routes
 const MainLayout = ({ currentUser, handleLogout, isSidebarOpen, setSidebarOpen, activeStore, theme, setTheme }: any) => {
     return (
         <div className="flex flex-col h-screen bg-slate-50 dark:bg-gradient-to-b dark:from-slate-950 dark:to-[#111827] text-slate-800 dark:text-slate-200" dir="rtl">
@@ -103,31 +95,40 @@ const EmployeeLayoutWrapper = ({ children, ...props }: any) => {
     return <EmployeeLayout {...props}>{children}</EmployeeLayout>;
 };
 
+// ✅ FIX: تعريف CatchAllRedirect قبل الـ AppComponent
+const CatchAllRedirect = ({ currentUser, isEmployeeSession }: any) => {
+    if (!currentUser) {
+        return <Navigate to="/owner-login" replace />;
+    }
+    if (isEmployeeSession) {
+        return <Navigate to="/employee/dashboard" replace />;
+    }
+    if (currentUser.isAdmin) {
+        return <Navigate to="/admin" replace />;
+    }
+    return <Navigate to="/" replace />;
+};
+
 function sanitizeData(storeData: StoreData): StoreData {
     if (!storeData) return storeData;
 
-    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/; // Simplified check for ISO format
+    const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
     let hasChanges = false;
 
     const fixDate = (dateString: string): string | null => {
         if (!dateString || typeof dateString !== 'string') return null;
 
-        // If it's already in a valid ISO-like format, do nothing.
         if (isoDateRegex.test(dateString)) {
             return null;
         }
         
-        // Attempt to parse it. This will fail for non-standard formats like the Arabic locale one.
         const parsedDate = new Date(dateString);
 
-        // If parsing fails OR if it contains Arabic numerals (a strong sign of the old bug), it's corrupted.
         if (isNaN(parsedDate.getTime()) || /[٠-٩]/.test(dateString)) {
             console.warn(`Found and fixed corrupted date format: "${dateString}". Replacing with current time.`);
             hasChanges = true;
-            // We replace it with the current time to ensure data integrity, even if the original time is lost.
             return new Date().toISOString();
         } else {
-            // The date was parsable but not in ISO format (e.g., "2024-01-01"). Convert it to full ISO format.
             console.log(`Normalized date format from "${dateString}" to ISO format.`);
             hasChanges = true;
             return parsedDate.toISOString();
@@ -173,7 +174,7 @@ export const AppComponent = () => {
     const [welcomeScreenShown, setWelcomeScreenShown] = useState<boolean>(false);
     const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
     const [saveMessage, setSaveMessage] = useState('');
-    // FIX: Replaced `NodeJS.Timeout` with `ReturnType<typeof setTimeout>` for browser compatibility. `NodeJS.Timeout` is a Node.js specific type and is not available in the browser environment.
+    // ✅ FIX: استخدام ReturnType للتوافق مع المتصفح
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const refreshDebounceTimers = useRef<Record<string, ReturnType<typeof setTimeout> | null>>({});
     const isRefreshing = useRef(false);
@@ -201,32 +202,27 @@ export const AppComponent = () => {
         
         if (isRefreshing.current) {
             console.log('[AUTO-SAVE] Skipped save because a refresh just occurred.');
-            isRefreshing.current = false; // Reset flag and skip this cycle
+            isRefreshing.current = false;
             return;
         }
 
-        // A change occurred. Indicate that there are unsaved changes.
-        // Don't change status if it's already saving or pending.
+        // ✅ FIX: معالجة أفضل لحالة الحفظ
         if (saveStatus === 'success' || saveStatus === 'idle' || saveStatus === 'error') {
             setSaveStatus('pending');
             setSaveMessage('تغييرات غير محفوظة...');
         }
 
-        // Clear previous debounce timer to reset the countdown
         if (debounceTimer.current) {
             clearTimeout(debounceTimer.current);
         }
 
-        // Set a new timer to perform the save after a period of inactivity
         debounceTimer.current = setTimeout(async () => {
             setSaveStatus('saving');
             setSaveMessage('جاري الحفظ...');
 
             try {
-                // Save global data (users)
                 await db.saveGlobalData({ users, loyaltyData: {} });
 
-                // Save active store data
                 if (activeStoreId && allStoresData[activeStoreId] && activeStore) {
                     const { success, error } = await db.saveStoreData(activeStore, allStoresData[activeStoreId]);
                     if (!success) {
@@ -243,9 +239,8 @@ export const AppComponent = () => {
                 setSaveMessage(e.message || 'فشل الحفظ');
                 setTimeout(() => setSaveStatus('idle'), 3000);
             }
-        }, 2500); // 2.5-second debounce period
+        }, 2500);
 
-        // Cleanup function to clear timer on component unmount or before next effect run
         return () => {
             if (debounceTimer.current) {
                 clearTimeout(debounceTimer.current);
@@ -321,7 +316,6 @@ export const AppComponent = () => {
     };
 
     useEffect(() => {
-        // PWA setup
         const handleBeforeInstallPrompt = (e: Event) => {
             e.preventDefault();
             setInstallPrompt(e);
@@ -411,7 +405,7 @@ export const AppComponent = () => {
                     handleSetActiveStore(firstStoreId);
                     navigate('/');
                 } else {
-                    setActiveStoreId(null); // No stores, so no active store
+                    setActiveStoreId(null);
                     navigate('/create-store');
                 }
             }
@@ -425,7 +419,7 @@ export const AppComponent = () => {
     const handleSetActiveStore = async (storeId: string) => {
         setActiveStoreId(storeId);
         localStorage.setItem('lastActiveStoreId', storeId);
-        setCart([]); // Reset cart on store switch
+        setCart([]);
         if (!allStoresData[storeId]) {
             const storeData = await db.getStoreData(storeId) as StoreData | null;
             if (storeData) {
@@ -436,13 +430,11 @@ export const AppComponent = () => {
     };
 
     const handleEmployeeLogin = async ({ storeId, phone, password }: { storeId: string; phone: string; password: string }) => {
-        // Find owner to validate storeId
         const owner = users.find(u => u.stores?.some(s => s.id === storeId));
         if (!owner) {
             throw new Error("كود المتجر غير صحيح.");
         }
 
-        // Get store data
         let storeData = allStoresData[storeId];
         if (!storeData) {
             const data = await db.getStoreData(storeId) as StoreData | null;
@@ -455,7 +447,6 @@ export const AppComponent = () => {
             }
         }
         
-        // Find employee in store
         const employeeRecord = storeData.settings.employees.find(e => e.id === phone);
         if (!employeeRecord) {
             throw new Error("لست موظفاً في هذا المتجر.");
@@ -467,13 +458,11 @@ export const AppComponent = () => {
             throw new Error(`حالة حسابك هي "${statusText}". يرجى التواصل مع مدير المتجر.`);
         }
 
-        // Find user account and check password
         const employeeUser = users.find(u => u.phone === phone);
         if (!employeeUser || employeeUser.password !== password) {
             throw new Error("رقم الهاتف أو كلمة المرور غير صحيحة.");
         }
 
-        // Success!
         completeLogin(employeeUser, { isEmployee: true, storeId: storeId });
     };
 
@@ -538,7 +527,7 @@ export const AppComponent = () => {
             orders: [],
             settings: {
                 ...INITIAL_SETTINGS,
-                products: oneToolzProducts, // Pre-seed products for new stores
+                products: oneToolzProducts,
             },
             wallet: { balance: 0, transactions: [] },
             cart: [],
@@ -656,7 +645,7 @@ export const AppComponent = () => {
             console.log('[REALTIME] Removing subscriptions.');
             subscriptions.forEach(sub => supabase.removeChannel(sub));
         };
-    }, [activeStoreId]); // Re-run if activeStoreId changes to update the refreshStoreData closure
+    }, [activeStoreId]);
 
     if (!authChecked) {
         return <GlobalLoader />;
@@ -671,8 +660,8 @@ export const AppComponent = () => {
         />;
     }
     
-    // Props passed down to layouts and pages
-    const pageProps = {
+    // ✅ FIX: استخدام useMemo لتحسين الأداء وتجنب التكرار
+    const pageProps = useMemo(() => ({
         users, setUsers, allStoresData, setAllStoresData, currentUser, activeStore,
         orders: activeStoreId ? allStoresData[activeStoreId]?.orders || [] : [],
         settings: activeStoreId ? allStoresData[activeStoreId]?.settings || INITIAL_SETTINGS : INITIAL_SETTINGS,
@@ -680,7 +669,6 @@ export const AppComponent = () => {
         cart,
         setOrders: (updater: any) => {
             if(activeStoreId) {
-                // FIX: When updating store data, ensure a complete default object is provided if the store data doesn't exist yet, to satisfy the `StoreData` type.
                 setAllStoresData(p => ({
                     ...p, 
                     [activeStoreId]: {
@@ -692,7 +680,6 @@ export const AppComponent = () => {
         },
         setSettings: (updater: any) => {
             if(activeStoreId) {
-                // FIX: When updating store data, ensure a complete default object is provided if the store data doesn't exist yet, to satisfy the `StoreData` type.
                 setAllStoresData(p => ({
                     ...p, 
                     [activeStoreId]: {
@@ -704,7 +691,6 @@ export const AppComponent = () => {
         },
         setWallet: (updater: any) => {
              if(activeStoreId) {
-                // FIX: When updating store data, ensure a complete default object is provided if the store data doesn't exist yet, to satisfy the `StoreData` type.
                 setAllStoresData(p => ({
                     ...p, 
                     [activeStoreId]: {
@@ -714,9 +700,9 @@ export const AppComponent = () => {
                 }));
             }
         },
-    };
-    
-    // This component acts as a guard for owner routes.
+    }), [users, allStoresData, currentUser, activeStore, activeStoreId, cart]);
+
+    // ✅ FIX: تحسين OwnerLayoutWrapper مع معالجة أفضل للحالات
     const OwnerLayoutWrapper = () => {
         const location = useLocation();
     
@@ -727,7 +713,7 @@ export const AppComponent = () => {
                 }, 1500);
                 return () => clearTimeout(timer);
             }
-        }, [welcomeScreenShown]);
+        }, []);
     
         if (isEmployeeSession) {
             return <Navigate to="/employee/dashboard" replace />;
@@ -758,20 +744,6 @@ export const AppComponent = () => {
     
         return <MainLayout currentUser={currentUser} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} setSidebarOpen={setIsSidebarOpen} activeStore={activeStore} theme={theme} setTheme={setTheme} />;
     };
-    
-    // This component handles redirection for any undefined routes.
-    const CatchAllRedirect = () => {
-        if (!currentUser) {
-            return <Navigate to="/owner-login" replace />;
-        }
-        if (isEmployeeSession) {
-            return <Navigate to="/employee/dashboard" replace />;
-        }
-        if (currentUser.isAdmin) {
-            return <Navigate to="/admin" replace />;
-        }
-        return <Navigate to="/" replace />;
-    };
 
     return (
         <>
@@ -788,14 +760,19 @@ export const AppComponent = () => {
 
                 <Route path="/employee" element={
                     <EmployeeLayoutWrapper 
-                        currentUser={currentUser} onLogout={handleLogout}
+                        currentUser={currentUser} 
+                        onLogout={handleLogout}
                         storeOwner={users.find(u => u.stores?.some(s => s.id === activeStoreId))}
                         activeStoreId={activeStoreId}
-                        theme={theme} setTheme={setTheme}
-                        allStoresData={allStoresData} users={users}
+                        theme={theme} 
+                        setTheme={setTheme}
+                        allStoresData={allStoresData} 
+                        users={users}
                         handleSetActiveStore={handleSetActiveStore}
-                        installPrompt={installPrompt} onInstall={() => installPrompt?.prompt()}
-                        isStandalone={isStandalone} isIos={isIos}
+                        installPrompt={installPrompt} 
+                        onInstall={() => installPrompt?.prompt()}
+                        isStandalone={isStandalone} 
+                        isIos={isIos}
                     >
                         <Outlet/>
                     </EmployeeLayoutWrapper>
@@ -853,7 +830,8 @@ export const AppComponent = () => {
                 <Route path="store" element={<StorefrontPage {...pageProps} onAddToCart={() => {}} onUpdateCartQuantity={() => {}} onRemoveFromCart={() => {}} />} />
                 <Route path="checkout" element={<CheckoutPage {...pageProps} onPlaceOrder={() => '123'} />} />
                 <Route path="order-success/:orderId" element={<OrderSuccessPage {...pageProps} />} />
-                <Route path="*" element={<CatchAllRedirect />} />
+                {/* ✅ FIX: تمرير props صحيحة للـ CatchAllRedirect */}
+                <Route path="*" element={<CatchAllRedirect currentUser={currentUser} isEmployeeSession={isEmployeeSession} />} />
             </Routes>
             {showCongratsModal && <CongratsModal onClose={() => setShowCongratsModal(false)} />}
             <GlobalSaveIndicator status={saveStatus} message={saveMessage} />
@@ -861,13 +839,11 @@ export const AppComponent = () => {
     );
 };
 
-// Wrapper needed for react-router v6 hooks
+// ✅ FIX: Wrapper for react-router hooks
 export const AppWrapper = () => (
     <HashRouter>
         <AppComponent />
     </HashRouter>
 );
 
-// We keep a named export for index.tsx, but the app itself is now a React app.
-// The default export is what matters for the React ecosystem.
 export default AppWrapper;
